@@ -1,5 +1,4 @@
 #include "graphics/vulkan/vulkanFence.hpp"
-#include "..\..\..\include\graphics\vulkan\vulkanFence.hpp"
 
 vulkanFence::vulkanFence(VkDevice device, VkFenceCreateFlags fenceFlags)
     {

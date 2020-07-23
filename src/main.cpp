@@ -1,5 +1,5 @@
-// Roll-a-Ball
-// A simple rolling ball game made with the sole purpose of figuring out how Vulkan and PhysX work on an implementation level
+// Voxels!
+// Voxel rendering so I can hate myself
 #include "typeDefines.hpp"
 #include "graphics/window.hpp"
 #include "graphics/renderer.hpp"
@@ -7,31 +7,6 @@
 #include "clock.hpp"
 #include <string>
 #include <array>
-#include <iostream>
-
-#include <glm/mat4x4.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/vec3.hpp>
-
-#include "graphics/vertex.hpp"
-#include "graphics/vertexBuffer.hpp"
-#include "graphics/vulkan/vulkanDescriptorSet.hpp"
-#include "graphics/vulkan/vulkanSampler.hpp"
-#include "graphics/image.hpp"
-#include "graphics/uniformBuffer.hpp"
-#include "graphics/indexBuffer.hpp"
-
-struct mvp
-    {
-        alignas(16) glm::mat4 m_model;
-        alignas(16) glm::mat4 m_view;
-        alignas(16) glm::mat4 m_projection;
-    };
-
-struct transformation
-    {
-        alignas(16) glm::vec3 m_position;
-    };
 
 int main()
     {
