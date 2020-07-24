@@ -37,8 +37,8 @@ int main()
 
         renderer renderer(app);
 
-        constexpr int size = 64;
-        constexpr float voxelSize = 1.f;
+        constexpr int size = 1;
+        constexpr float voxelSize = 0.2f;
 
         char voxelArray[size][size][size];
         std::memset(voxelArray, 1, size * size * size);
@@ -112,12 +112,12 @@ int main()
 
                                         indices.insert(indices.end(), {
                                             indexBegin + 0, indexBegin + 1, indexBegin + 2, indexBegin + 0, indexBegin + 2, indexBegin + 3,
-                                            indexBegin + 0, indexBegin + 3, indexBegin + 7, indexBegin + 0, indexBegin + 4, indexBegin + 7,
-                                            indexBegin + 0, indexBegin + 1, indexBegin + 5, indexBegin + 0, indexBegin + 4, indexBegin + 5,
+                                            indexBegin + 0, indexBegin + 3, indexBegin + 7, indexBegin + 0, indexBegin + 7, indexBegin + 4,
+                                            indexBegin + 0, indexBegin + 1, indexBegin + 5, indexBegin + 0, indexBegin + 5, indexBegin + 4,
 
-                                            indexBegin + 6, indexBegin + 2, indexBegin + 3, indexBegin + 6, indexBegin + 7, indexBegin + 3,
+                                            indexBegin + 6, indexBegin + 3, indexBegin + 2, indexBegin + 6, indexBegin + 7, indexBegin + 3,
                                             indexBegin + 6, indexBegin + 4, indexBegin + 7, indexBegin + 6, indexBegin + 5, indexBegin + 4,
-                                            indexBegin + 6, indexBegin + 5, indexBegin + 1, indexBegin + 6, indexBegin + 2, indexBegin + 1,
+                                            indexBegin + 6, indexBegin + 1, indexBegin + 5, indexBegin + 6, indexBegin + 2, indexBegin + 1,
                                         });
                                     }
                             }
@@ -135,7 +135,7 @@ int main()
         mvp camera;
         camera.m_model = glm::rotate(glm::mat4(1.f), 5 * glm::radians(45.f), glm::vec3(0.f, 1.f, 0.f));
         camera.m_view = glm::lookAt(cameraPos.m_position, glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, -1.f, 0.f));
-        camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, 100.f);
+        camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, 10.f);
         camera.m_projection[1][1] *= -1;
 
 
@@ -225,7 +225,7 @@ int main()
                         camera.m_view = glm::lookAt(cameraPos.m_position, glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, -1.f, 0.f));
                     }
 
-                camera.m_model = glm::rotate(glm::mat4(1.f), (float)currentTime * glm::radians(15.f), glm::vec3(0.f, 1.f, 0.f));
+                camera.m_model = glm::rotate(glm::mat4(1.f), (float)currentTime * glm::radians(45.f), glm::vec3(0.f, 1.f, 0.f));
                 mvpUBO.bind(camera);
 
                 renderer.draw(*ds, vbo, &ibo);
