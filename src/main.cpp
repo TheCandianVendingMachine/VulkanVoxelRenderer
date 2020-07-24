@@ -113,7 +113,7 @@ int main()
                                         indices.insert(indices.end(), {
                                             indexBegin + 0, indexBegin + 1, indexBegin + 2, indexBegin + 0, indexBegin + 2, indexBegin + 3,
                                             indexBegin + 0, indexBegin + 3, indexBegin + 7, indexBegin + 0, indexBegin + 7, indexBegin + 4,
-                                            indexBegin + 0, indexBegin + 1, indexBegin + 5, indexBegin + 0, indexBegin + 5, indexBegin + 4,
+                                            indexBegin + 0, indexBegin + 5, indexBegin + 1, indexBegin + 0, indexBegin + 4, indexBegin + 5,
 
                                             indexBegin + 6, indexBegin + 3, indexBegin + 2, indexBegin + 6, indexBegin + 7, indexBegin + 3,
                                             indexBegin + 6, indexBegin + 4, indexBegin + 7, indexBegin + 6, indexBegin + 5, indexBegin + 4,
