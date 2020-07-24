@@ -19,21 +19,13 @@ void descriptorHandler::create(vulkanDevice &device, unsigned int swapChainImage
         transformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
         transformBinding.pImmutableSamplers = nullptr;
 
-        VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-        samplerLayoutBinding.binding = 2;
-        samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        samplerLayoutBinding.descriptorCount = 1;
-        samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        samplerLayoutBinding.pImmutableSamplers = nullptr;
-        m_descriptorSetLayout.create(device, { mvpBinding, transformBinding, samplerLayoutBinding });
+        m_descriptorSetLayout.create(device, { mvpBinding, transformBinding });
 
-        std::vector<VkDescriptorPoolSize> poolSizes(3);
+        std::vector<VkDescriptorPoolSize> poolSizes(2);
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImageCount); // how many of this type to allocate
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImageCount); // how many of this type to allocate
-        poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[2].descriptorCount = static_cast<uint32_t>(swapChainImageCount);
         m_descriptorPool.create(device, c_maxSets * swapChainImageCount, poolSizes);
 
         m_device = &device;

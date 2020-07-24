@@ -65,19 +65,6 @@ void descriptorSet::update()
                         descriptorWrites[i].pTexelBufferView = nullptr;
                         descriptorWrites[i].pNext = nullptr;
                     }
-                
-                unsigned int imageSamplerBindingIndex = m_bufferInfo.size();
-                descriptorWrites.emplace_back();
-                descriptorWrites[imageSamplerBindingIndex].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                descriptorWrites[imageSamplerBindingIndex].dstSet = descriptorSet;
-                descriptorWrites[imageSamplerBindingIndex].dstBinding = imageSamplerBindingIndex;
-                descriptorWrites[imageSamplerBindingIndex].dstArrayElement = 0;
-                descriptorWrites[imageSamplerBindingIndex].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                descriptorWrites[imageSamplerBindingIndex].descriptorCount = 1;
-                descriptorWrites[imageSamplerBindingIndex].pBufferInfo = nullptr;
-                descriptorWrites[imageSamplerBindingIndex].pImageInfo = &m_imageInfo;
-                descriptorWrites[imageSamplerBindingIndex].pTexelBufferView = nullptr;
-                descriptorWrites[imageSamplerBindingIndex].pNext = nullptr;
 
                 vkUpdateDescriptorSets(m_device->getUnderlyingDevice(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
             }

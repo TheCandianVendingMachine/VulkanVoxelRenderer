@@ -30,7 +30,7 @@ void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
         renderPassInfo.renderArea.extent = m_surface.m_swapChain.getExtent();
 
         std::array<VkClearValue, 2> clearValues{};
-        clearValues[0].color = { 0.4f, 0.12f, 0.9f, 1.f };
+        clearValues[0].color = { 1.f, 1.f, 1.f, 1.f };
         clearValues[1].depthStencil = { 1, 0 };
 
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
