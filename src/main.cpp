@@ -37,11 +37,16 @@ int main()
 
         renderer renderer(app);
 
-        constexpr int size = 1;
-        constexpr float voxelSize = 0.2f;
+        constexpr int size = 64;
+        constexpr float voxelSize = 1.0f;
 
         char voxelArray[size][size][size];
         std::memset(voxelArray, 1, size * size * size);
+
+        glm::vec3 colours[] = {
+            { 0.23f, 0.48f, 0.34f },
+            { 0.53f, 0.81f, 0.92f },
+        };
 
         std::vector<vertex> vertices;
         std::vector<fe::index> indices;
@@ -52,9 +57,21 @@ int main()
                     {
                         for (int z = 0; z < size; z++)
                             {
-                                if (voxelArray[x][y][z] != 0)
+                                // if a voxel is covered there will be no transparent voxels in any of the 6 directions
+                                // if so, we don't draw it
+                                bool mesh =     (voxelArray[x][y][z] != 0) && ((
+                                                    (x + 1 >= size || x - 1 < 0) ||
+                                                    (y + 1 >= size || y - 1 < 0) ||
+                                                    (z + 1 >= size || z - 1 < 0)
+                                                ) || (
+                                                    (voxelArray[x + 1][y][z] == 0) || (voxelArray[x - 1][y][z] == 0) ||
+                                                    (voxelArray[x][y + 1][z] == 0) || (voxelArray[x][y - 1][z] == 0) ||
+                                                    (voxelArray[x][y][z + 1] == 0) || (voxelArray[x][y][z - 1] == 0)
+                                                ));
+                                if (mesh)
                                     {
                                         vertex v;
+                                        v.m_colour = colours[voxelArray[x][y][z] - 1];
 
                                         unsigned int indexBegin = vertices.size();
 
@@ -131,15 +148,17 @@ int main()
 
         transformation cameraPos;
         cameraPos.m_position = { 3, -1, 0 };
+        float m_cameraRotation = 45.f;
 
         mvp camera;
-        camera.m_model = glm::rotate(glm::mat4(1.f), 5 * glm::radians(45.f), glm::vec3(0.f, 1.f, 0.f));
+        camera.m_model = glm::rotate(glm::mat4(1.f), glm::radians(m_cameraRotation), glm::vec3(0.f, 1.f, 0.f));
         camera.m_view = glm::lookAt(cameraPos.m_position, glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, -1.f, 0.f));
-        camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, 10.f);
+        camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, 100.f);
         camera.m_projection[1][1] *= -1;
 
 
-        constexpr float speed = 5.f;
+        constexpr float speed = 10.f;
+        constexpr float rotationSpeed = 90.f;
         transformation t;
         t.m_position = {0, 0, 0};
 
@@ -203,30 +222,66 @@ int main()
                     }
 
                 bool keyPressed = false;
+                glm::vec3 translation = { 0, 0, 0 };
                 while (accumulator >= updateRate)
                     {
                         accumulator -= updateRate;
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_W))
                             {
-                                cameraPos.m_position.x += -speed * updateRate;
+                                translation.x += speed * updateRate;
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_S))
                             {
-                                cameraPos.m_position.x += speed * updateRate;
+                                translation.x += -speed * updateRate;
+                                keyPressed = true;
+                            }
+
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_A))
+                            {
+                                translation.z += speed * updateRate;
+                                keyPressed = true;
+                            }
+
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_D))
+                            {
+                                translation.z += -speed * updateRate;
+                                keyPressed = true;
+                            }
+
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_Q))
+                            {
+                                translation.y += speed * updateRate;
+                                keyPressed = true;
+                            }
+
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_Z))
+                            {
+                                translation.y += -speed * updateRate;
+                                keyPressed = true;
+                            }
+
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_LEFT))
+                            {
+                                m_cameraRotation += -rotationSpeed * updateRate;
+                                keyPressed = true;
+                            }
+
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_RIGHT))
+                            {
+                                m_cameraRotation += rotationSpeed * updateRate;
                                 keyPressed = true;
                             }
                     }
 
                 if (keyPressed)
                     {
-                        camera.m_view = glm::lookAt(cameraPos.m_position, glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, -1.f, 0.f));
+                        camera.m_model = glm::rotate(glm::mat4(1.f), glm::radians(m_cameraRotation), glm::vec3(0.f, 1.f, 0.f));
+                        camera.m_view = glm::translate(camera.m_view, translation);
+                        mvpUBO.bind(camera);
                     }
-
-                camera.m_model = glm::rotate(glm::mat4(1.f), (float)currentTime * glm::radians(45.f), glm::vec3(0.f, 1.f, 0.f));
-                mvpUBO.bind(camera);
 
                 renderer.draw(*ds, vbo, &ibo);
 
