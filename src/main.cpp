@@ -154,8 +154,8 @@ int main()
 
         renderer renderer(app);
 
-        constexpr int size = 6;
-        constexpr float voxelSize = 1.0f;
+        constexpr int size = 64;
+        constexpr float voxelSize = 0.16f;
 
         char voxelArray[size][size][size];
         std::memset(voxelArray, 1, size * size * size);
@@ -170,23 +170,27 @@ int main()
                         for (int z = 0; z < size; z++)
                             {
                                 if (voxelArray[x][y][z] == 0) { continue; }
+                                float posX = x * voxelSize;
+                                float posY = y * voxelSize;
+                                float posZ = z * voxelSize;
+
                                 quad q = {};
                                 // front/back plane
                                 if ((z + 1) >= size || voxelArray[x][y][z + 1] == 0)
                                     {
                                         q.m_orientation = 1;
-                                        q.m_position.x = x;
-                                        q.m_position.y = y;
-                                        q.m_position.z = z + voxelSize;
+                                        q.m_position.x = posX;
+                                        q.m_position.y = posY;
+                                        q.m_position.z = posZ + voxelSize;
                                         quadVector.push_back(q);
                                     }
 
                                 if (z <= 0 || voxelArray[x][y][z - 1] == 0)
                                     {
                                         q.m_orientation = -1;
-                                        q.m_position.x = x;
-                                        q.m_position.y = y;
-                                        q.m_position.z = z;
+                                        q.m_position.x = posX;
+                                        q.m_position.y = posY;
+                                        q.m_position.z = posZ;
                                         quadVector.push_back(q);
                                     }
 
@@ -194,18 +198,18 @@ int main()
                                 if (y <= 0 || voxelArray[x][y - 1][z] == 0)
                                     {
                                         q.m_orientation = 2;
-                                        q.m_position.x = x;
-                                        q.m_position.y = z;
-                                        q.m_position.z = y;
+                                        q.m_position.x = posX;
+                                        q.m_position.y = posZ;
+                                        q.m_position.z = posY;
                                         quadVector.push_back(q);
                                     }
 
                                 if ((y + 1) >= size || voxelArray[x][y + 1][z] == 0)
                                     {
                                         q.m_orientation = -2;
-                                        q.m_position.x = x;
-                                        q.m_position.y = z;
-                                        q.m_position.z = y + voxelSize;
+                                        q.m_position.x = posX;
+                                        q.m_position.y = posZ;
+                                        q.m_position.z = posY + voxelSize;
                                         quadVector.push_back(q);
                                     }
 
@@ -213,18 +217,18 @@ int main()
                                 if ((x + 1) >= size || voxelArray[x + 1][y][z] == 0)
                                     {
                                         q.m_orientation = 3;
-                                        q.m_position.x = y;
-                                        q.m_position.y = z;
-                                        q.m_position.z = x + voxelSize;
+                                        q.m_position.x = posY;
+                                        q.m_position.y = posZ;
+                                        q.m_position.z = posX + voxelSize;
                                         quadVector.push_back(q);
                                     }
 
                                 if (x <= 0 || voxelArray[x - 1][y][z] == 0)
                                     {
                                         q.m_orientation = -3;
-                                        q.m_position.x = y;
-                                        q.m_position.y = z;
-                                        q.m_position.z = x;
+                                        q.m_position.x = posY;
+                                        q.m_position.y = posZ;
+                                        q.m_position.z = posX;
                                         quadVector.push_back(q);
                                     }
                             }
