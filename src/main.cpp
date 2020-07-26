@@ -30,6 +30,123 @@ struct transformation
         alignas(16) glm::vec3 m_position;
     };
 
+struct quad
+    {
+        glm::vec3 m_position;
+        char m_orientation = 0; // +-1 = xy, +-2 = xz, +-3 = yz
+    };
+
+void buildGeometry(const std::vector<quad> &quads, vertexBuffer &vbo, indexBuffer &ibo, const float size)
+    {
+        vertex vertexArr[4] = {};
+        vertex &v0 = vertexArr[0];
+        vertex &v1 = vertexArr[1];
+        vertex &v2 = vertexArr[2];
+        vertex &v3 = vertexArr[3];
+
+        fe::index indexArrPositive[6] = {
+            0, 1, 2, 0, 2, 3
+        };
+        fe::index indexArrNegative[6] = {
+            2, 1, 0, 3, 2, 0
+        };
+
+        glm::vec3 colours[] = {
+            { 0.23f, 0.48f, 0.34f },
+            { 0.53f, 0.81f, 0.92f },
+            { 0.37f, 0.50f, 0.22f }
+        };
+
+        for (auto &quad : quads)
+            {
+                v0.m_colour = colours[std::abs(quad.m_orientation) - 1];
+                v1.m_colour = colours[std::abs(quad.m_orientation) - 1];
+                v2.m_colour = colours[std::abs(quad.m_orientation) - 1];
+                v3.m_colour = colours[std::abs(quad.m_orientation) - 1];
+
+                switch (std::abs(quad.m_orientation))
+                    {
+                        case 1:
+                            v0.m_position.x = quad.m_position.x;
+                            v0.m_position.y = quad.m_position.y;
+                            v0.m_position.z = quad.m_position.z;
+
+                            v1.m_position.x = quad.m_position.x + size;
+                            v1.m_position.y = quad.m_position.y;
+                            v1.m_position.z = quad.m_position.z;
+
+                            v2.m_position.x = quad.m_position.x + size;
+                            v2.m_position.y = quad.m_position.y + size;
+                            v2.m_position.z = quad.m_position.z;
+
+                            v3.m_position.x = quad.m_position.x;
+                            v3.m_position.y = quad.m_position.y + size;
+                            v3.m_position.z = quad.m_position.z;
+                            break;
+                        case 2:
+                            v0.m_position.x = quad.m_position.x;
+                            v0.m_position.y = quad.m_position.z;
+                            v0.m_position.z = quad.m_position.y;
+
+                            v1.m_position.x = quad.m_position.x + size;
+                            v1.m_position.y = quad.m_position.z;
+                            v1.m_position.z = quad.m_position.y;
+
+                            v2.m_position.x = quad.m_position.x + size;
+                            v2.m_position.y = quad.m_position.z;
+                            v2.m_position.z = quad.m_position.y + size;
+
+                            v3.m_position.x = quad.m_position.x;
+                            v3.m_position.y = quad.m_position.z;
+                            v3.m_position.z = quad.m_position.y + size;
+                            break;
+                        case 3:
+                            v0.m_position.x = quad.m_position.z;
+                            v0.m_position.y = quad.m_position.x;
+                            v0.m_position.z = quad.m_position.y;
+
+                            v1.m_position.x = quad.m_position.z;
+                            v1.m_position.y = quad.m_position.x + size;
+                            v1.m_position.z = quad.m_position.y;
+
+                            v2.m_position.x = quad.m_position.z;
+                            v2.m_position.y = quad.m_position.x + size;
+                            v2.m_position.z = quad.m_position.y + size;
+
+                            v3.m_position.x = quad.m_position.z;
+                            v3.m_position.y = quad.m_position.x;
+                            v3.m_position.z = quad.m_position.y + size;
+                            break;
+                        default:
+                            break;
+                    }
+
+                vbo.addVertices(vertexArr, 4);
+                if (quad.m_orientation < 0)
+                    {
+                        ibo.addIndices(indexArrNegative, 6);
+                    }
+                else 
+                    {
+                        ibo.addIndices(indexArrPositive, 6);
+                    }
+                
+                indexArrPositive[0] += 4;
+                indexArrPositive[1] += 4;
+                indexArrPositive[2] += 4;
+                indexArrPositive[3] += 4;
+                indexArrPositive[4] += 4;
+                indexArrPositive[5] += 4;
+
+                indexArrNegative[0] += 4;
+                indexArrNegative[1] += 4;
+                indexArrNegative[2] += 4;
+                indexArrNegative[3] += 4;
+                indexArrNegative[4] += 4;
+                indexArrNegative[5] += 4;
+            }
+    }
+
 int main()
     {
         glfwInit();
@@ -37,112 +154,61 @@ int main()
 
         renderer renderer(app);
 
-        constexpr int size = 64;
+        constexpr int size = 16;
         constexpr float voxelSize = 1.0f;
 
         char voxelArray[size][size][size];
         std::memset(voxelArray, 1, size * size * size);
 
-        glm::vec3 colours[] = {
-            { 0.23f, 0.48f, 0.34f },
-            { 0.53f, 0.81f, 0.92f },
-        };
-
-        std::vector<vertex> vertices;
-        std::vector<fe::index> indices;
-
+        vertexBuffer vbo(0, false);
+        indexBuffer ibo(0, false);
+        std::vector<quad> quadVector;
         for (int x = 0; x < size; x++)
             {
                 for (int y = 0; y < size; y++)
                     {
                         for (int z = 0; z < size; z++)
                             {
-                                // if a voxel is covered there will be no transparent voxels in any of the 6 directions
-                                // if so, we don't draw it
-                                bool mesh =     (voxelArray[x][y][z] != 0) && ((
-                                                    (x + 1 >= size || x - 1 < 0) ||
-                                                    (y + 1 >= size || y - 1 < 0) ||
-                                                    (z + 1 >= size || z - 1 < 0)
-                                                ) || (
-                                                    (voxelArray[x + 1][y][z] == 0) || (voxelArray[x - 1][y][z] == 0) ||
-                                                    (voxelArray[x][y + 1][z] == 0) || (voxelArray[x][y - 1][z] == 0) ||
-                                                    (voxelArray[x][y][z + 1] == 0) || (voxelArray[x][y][z - 1] == 0)
-                                                ));
-                                if (mesh)
+                                if (voxelArray[x][y][z] != 0)
                                     {
-                                        vertex v;
-                                        v.m_colour = colours[voxelArray[x][y][z] - 1];
+                                        quad quads[6] = {};
+                                        quads[0].m_orientation = 1;
+                                        quads[0].m_position.x = x;
+                                        quads[0].m_position.y = y;
+                                        quads[0].m_position.z = z + voxelSize;
+                                        quads[1].m_orientation = -1;
+                                        quads[1].m_position.x = x;
+                                        quads[1].m_position.y = y;
 
-                                        unsigned int indexBegin = vertices.size();
+                                        quads[2].m_orientation = 2;
+                                        quads[2].m_position.x = x;
+                                        quads[2].m_position.y = z;
+                                        quads[3].m_orientation = -2;
+                                        quads[3].m_position.x = x;
+                                        quads[3].m_position.y = z;
+                                        quads[3].m_position.z = y + voxelSize;
 
-                                        float xPos = static_cast<float>(x) * voxelSize;
-                                        float yPos = static_cast<float>(y) * voxelSize;
-                                        float zPos = static_cast<float>(z) * voxelSize;
+                                        quads[4].m_orientation = 3;
+                                        quads[4].m_position.x = y;
+                                        quads[4].m_position.y = z;
+                                        quads[4].m_position.z = x + voxelSize;
+                                        quads[5].m_orientation = -3;
+                                        quads[5].m_position.x = y;
+                                        quads[5].m_position.y = z;
 
-                                        v.m_colour = (glm::vec3{ 240.f, 163.f, 255.f }) / 255.f;
-                                        v.m_position.x = xPos;
-                                        v.m_position.y = yPos;
-                                        v.m_position.z = zPos;
-                                        vertices.push_back(v);
-
-                                        v.m_colour = (glm::vec3{ 0.f, 117.f, 220.f }) / 255.f;
-                                        v.m_position.x = xPos + voxelSize;
-                                        v.m_position.y = yPos;
-                                        v.m_position.z = zPos;
-                                        vertices.push_back(v);
-
-                                        v.m_colour = (glm::vec3{ 153.f, 63.f, 0.f }) / 255.f;
-                                        v.m_position.x = xPos + voxelSize;
-                                        v.m_position.y = yPos;
-                                        v.m_position.z = zPos + voxelSize;
-                                        vertices.push_back(v);
-
-                                        v.m_colour = (glm::vec3{ 76.f, 0.f, 92.f }) / 255.f;
-                                        v.m_position.x = xPos;
-                                        v.m_position.y = yPos;
-                                        v.m_position.z = zPos + voxelSize;
-                                        vertices.push_back(v);
-                                        ///////////////////////////
-                                        v.m_colour = (glm::vec3{ 25.f, 25.f, 25.f }) / 255.f;
-                                        v.m_position.x = xPos;
-                                        v.m_position.y = yPos + voxelSize;
-                                        v.m_position.z = zPos;
-                                        vertices.push_back(v);
-
-                                        v.m_colour = (glm::vec3{ 0.f, 92.f, 49.f }) / 255.f;
-                                        v.m_position.x = xPos + voxelSize;
-                                        v.m_position.y = yPos + voxelSize;
-                                        v.m_position.z = zPos;
-                                        vertices.push_back(v);
-
-                                        v.m_colour = (glm::vec3{ 43.f, 206.f, 72.f }) / 255.f;
-                                        v.m_position.x = xPos + voxelSize;
-                                        v.m_position.y = yPos + voxelSize;
-                                        v.m_position.z = zPos + voxelSize;
-                                        vertices.push_back(v);
-
-                                        v.m_colour = (glm::vec3{ 255.f, 204.f, 153.f }) / 255.f;
-                                        v.m_position.x = xPos;
-                                        v.m_position.y = yPos + voxelSize;
-                                        v.m_position.z = zPos + voxelSize;
-                                        vertices.push_back(v);
-
-                                        indices.insert(indices.end(), {
-                                            indexBegin + 0, indexBegin + 1, indexBegin + 2, indexBegin + 0, indexBegin + 2, indexBegin + 3,
-                                            indexBegin + 0, indexBegin + 3, indexBegin + 7, indexBegin + 0, indexBegin + 7, indexBegin + 4,
-                                            indexBegin + 0, indexBegin + 5, indexBegin + 1, indexBegin + 0, indexBegin + 4, indexBegin + 5,
-
-                                            indexBegin + 6, indexBegin + 3, indexBegin + 2, indexBegin + 6, indexBegin + 7, indexBegin + 3,
-                                            indexBegin + 6, indexBegin + 4, indexBegin + 7, indexBegin + 6, indexBegin + 5, indexBegin + 4,
-                                            indexBegin + 6, indexBegin + 1, indexBegin + 5, indexBegin + 6, indexBegin + 2, indexBegin + 1,
-                                        });
+                                        quadVector.push_back(quads[0]);
+                                        quadVector.push_back(quads[1]);
+                                        quadVector.push_back(quads[2]);
+                                        quadVector.push_back(quads[3]);
+                                        quadVector.push_back(quads[4]);
+                                        quadVector.push_back(quads[5]);
                                     }
                             }
                     }
             }
 
-        vertexBuffer vbo(vertices.size(), false);
-        indexBuffer ibo(indices.size(), false);
+        buildGeometry(quadVector, vbo, ibo, voxelSize);
+
         uniformBuffer mvpUBO;
         uniformBuffer transformUBO;
 
@@ -156,7 +222,6 @@ int main()
         camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, 100.f);
         camera.m_projection[1][1] *= -1;
 
-
         constexpr float speed = 10.f;
         constexpr float rotationSpeed = 90.f;
         transformation t;
@@ -169,9 +234,6 @@ int main()
         ds->bindUBO(mvpUBO.getUniformBuffer(), mvpUBO.getBufferSize());
         ds->bindUBO(transformUBO.getUniformBuffer(), transformUBO.getBufferSize());
         ds->update();
-
-        vbo.addVertices(vertices.data(), vertices.size());
-        ibo.addIndices(indices.data(), indices.size());
 
         taskGraph taskGraph(1, 10);
 
