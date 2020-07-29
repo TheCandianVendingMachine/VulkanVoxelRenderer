@@ -35,6 +35,8 @@ int main()
         rng.startUp();
         #ifdef _DEBUG
         rng.seed(69420);
+        #else
+        rng.randomSeed();
         #endif
 
         voxelSpace space;
@@ -57,7 +59,7 @@ int main()
         camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, static_cast<float>(1 << 16));
         camera.m_projection[1][1] *= -1;
 
-        constexpr float speed = 10.f;
+        constexpr float speed = 50.f;
         constexpr float rotationSpeed = 90.f;
         transformation t;
         t.m_position = {0, 0, 0};

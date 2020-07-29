@@ -5,6 +5,7 @@
 #include "PerlinNoise.hpp"
 #include "random.hpp"
 #include <vector>
+#include <array>
 
 void voxelSpace::buildGeometry(voxelChunk &chunk)
     {
@@ -121,27 +122,37 @@ void voxelSpace::buildGeometry(voxelChunk &chunk)
     }
 
 voxelSpace::voxelSpace()
-    {
-        const siv::PerlinNoise perlin(fe::random::get().generate<uint32_t>());
-        test.create(64, 64, 64);
+    {   
+        double globalFrequency = 0.25;
+        std::array<std::array<double, 2>, 3> surfaceFrequencies = {{
+            {{ 2.0, 6.0 }},
+            {{ 0.5, 0.5 }},
+            {{ 0.8, 8.0 }},
+        }};
+
+        const siv::PerlinNoise noiseSurface(fe::random::get().generate<uint32_t>());
+        test.create(256, 256, 256);
 
         for (int x = 0; x < test.getSizeX(); x++)
             {
-                double nx = static_cast<double>(x) / test.getSizeX();
+                double nx = (static_cast<double>(x) / test.getSizeX());
                 for (int y = 0; y < test.getSizeY(); y++)
                     {
-                        double ny = static_cast<double>(y) / test.getSizeY();
+                        double ny = (static_cast<double>(y) / test.getSizeY());
                         for (int z = 0; z < test.getSizeZ(); z++)
                             {
-                                double nz = static_cast<double>(z) / test.getSizeZ();
-                                double noise = perlin.noise3D_0_1(nx, ny, nz);
+                                double nz = (static_cast<double>(z) / test.getSizeZ());
+                                double surfaceNoise = 0.0;
+                                for (const auto &frequency : surfaceFrequencies)
+                                    {
+                                        surfaceNoise += globalFrequency * frequency[0] * noiseSurface.noise3D_0_1(frequency[1] * nx, frequency[1] * ny, frequency[1] * nz);
+                                    }
 
                                 voxelType type = voxelType::NONE;
-                                if (noise > 0.5)
+                                if (surfaceNoise > 0.5 && surfaceNoise < 0.95)
                                     {
                                         type = voxelType::DEFAULT;
                                     }
-
                                 test.at(x, y, z) = type;
                             }
                     }
