@@ -14,6 +14,7 @@
 #include "graphics/descriptorSet.hpp"
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/rotate_vector.hpp>
 
 #include "voxel/voxelSpace.hpp"
 
@@ -51,16 +52,18 @@ int main()
 
         transformation cameraPos;
         cameraPos.m_position = { 3, -1, 0 };
-        float m_cameraRotation = 45.f;
+        glm::vec3 cameraDir = {1, 0, 0};
+        float m_cameraRotation = 0.f;
 
         mvp camera;
         camera.m_model = glm::rotate(glm::mat4(1.f), glm::radians(m_cameraRotation), glm::vec3(0.f, 1.f, 0.f));
-        camera.m_view = glm::lookAt(cameraPos.m_position, glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, -1.f, 0.f));
+        camera.m_view = glm::lookAt(cameraPos.m_position, cameraDir, glm::vec3(0.f, -1.f, 0.f));
         camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, static_cast<float>(1 << 16));
         camera.m_projection[1][1] *= -1;
 
-        constexpr float speed = 50.f;
-        constexpr float rotationSpeed = 90.f;
+        constexpr float speed = 16.f;
+        constexpr float rotationSpeed = 60.f;
+
         transformation t;
         t.m_position = {0, 0, 0};
 
@@ -121,64 +124,74 @@ int main()
                     }
 
                 bool keyPressed = false;
-                glm::vec3 translation = { 0, 0, 0 };
                 while (accumulator >= updateRate)
                     {
                         accumulator -= updateRate;
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_W))
                             {
-                                translation.x += speed * updateRate;
+                                cameraPos.m_position += cameraDir * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_S))
                             {
-                                translation.x += -speed * updateRate;
+                                cameraPos.m_position += -cameraDir * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_A))
                             {
-                                translation.z += speed * updateRate;
+                                cameraPos.m_position += -glm::cross(cameraDir, glm::vec3(0, -1.f, 0)) * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_D))
                             {
-                                translation.z += -speed * updateRate;
+                                cameraPos.m_position += glm::cross(cameraDir, glm::vec3(0, -1.f, 0)) * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_Q))
                             {
-                                translation.y += speed * updateRate;
+                                cameraPos.m_position.y += -speed * updateRate;
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_Z))
                             {
-                                translation.y += -speed * updateRate;
+                                cameraPos.m_position.y += speed * updateRate;
+                                keyPressed = true;
+                            }
+
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_UP))
+                            {
+                                cameraDir = glm::rotate(cameraDir, glm::radians(rotationSpeed * (float)updateRate), glm::cross(cameraDir, glm::vec3(0, -1.f, 0)));
+                                keyPressed = true;
+                            }
+
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_DOWN))
+                            {
+                                cameraDir = glm::rotate(cameraDir, -glm::radians(rotationSpeed * (float)updateRate), glm::cross(cameraDir, glm::vec3(0, -1.f, 0)));
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_LEFT))
                             {
-                                m_cameraRotation += -rotationSpeed * updateRate;
+                                cameraDir = glm::rotate(cameraDir, glm::radians(rotationSpeed * (float)updateRate), glm::vec3(0.f, -1.f, 0.f));
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_RIGHT))
                             {
-                                m_cameraRotation += rotationSpeed * updateRate;
+                                cameraDir = glm::rotate(cameraDir, -glm::radians(rotationSpeed * (float)updateRate), glm::vec3(0.f, -1.f, 0.f));
                                 keyPressed = true;
                             }
                     }
 
                 if (keyPressed)
                     {
-                        camera.m_model = glm::rotate(glm::mat4(1.f), glm::radians(m_cameraRotation), glm::vec3(0.f, 1.f, 0.f));
-                        camera.m_view = glm::translate(camera.m_view, translation);
+                        camera.m_view = glm::lookAt(cameraPos.m_position, cameraPos.m_position + cameraDir, glm::vec3(0, -1.f, 0));
                         mvpUBO.bind(camera);
                     }
 

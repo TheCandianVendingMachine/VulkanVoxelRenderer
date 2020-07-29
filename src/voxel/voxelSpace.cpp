@@ -123,16 +123,14 @@ void voxelSpace::buildGeometry(voxelChunk &chunk)
 
 voxelSpace::voxelSpace()
     {   
-        double globalFrequency = 0.25;
+        double globalFrequency = 0.85;
         std::array<std::array<double, 2>, 3> surfaceFrequencies = {{
-            {{ 2.0, 6.0 }},
-            {{ 0.5, 0.5 }},
-            {{ 0.8, 8.0 }},
+            {{ 1.0, 1.0 }},
+            {{ 0.2, 4.0 }},
         }};
 
         const siv::PerlinNoise noiseSurface(fe::random::get().generate<uint32_t>());
-        test.create(256, 256, 256);
-        test.setVoxelSize(1.f);
+        test.create(64, 64, 64);
 
         for (int x = 0; x < test.getSizeX(); x++)
             {
@@ -150,7 +148,7 @@ voxelSpace::voxelSpace()
                                     }
 
                                 voxelType type = voxelType::NONE;
-                                if (surfaceNoise > 0.5 && surfaceNoise < 0.95)
+                                if (surfaceNoise < 0.5)
                                     {
                                         type = voxelType::DEFAULT;
                                     }
