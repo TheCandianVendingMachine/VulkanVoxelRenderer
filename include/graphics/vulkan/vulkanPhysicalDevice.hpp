@@ -11,7 +11,7 @@ class vulkanPhysicalDevice
 
             uint32_t m_deviceCount = 0;
 
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
             bool isDeviceSuitable(VkPhysicalDevice device, VkSurfaceKHR surface);
             bool checkDeviceExtensionSupport(VkPhysicalDevice device);

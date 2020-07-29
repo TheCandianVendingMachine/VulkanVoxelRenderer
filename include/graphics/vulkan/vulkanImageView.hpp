@@ -8,7 +8,7 @@ class vulkanImageView
         private:
             VkImageView m_imageView = VK_NULL_HANDLE;
             VkDevice m_device = VK_NULL_HANDLE;
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
         public:
             vulkanImageView() = default;

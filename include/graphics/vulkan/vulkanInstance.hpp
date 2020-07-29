@@ -12,7 +12,7 @@ class vulkanInstance
             VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
 
             bool m_validationLayersEnabled = false;
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
         public:
             vulkanInstance() = default;

@@ -10,7 +10,7 @@ class vulkanPipelineLayout
             VkDevice m_device = VK_NULL_HANDLE;
             VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
 
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
         public:
             vulkanPipelineLayout() = default;

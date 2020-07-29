@@ -10,7 +10,7 @@ class vulkanDescriptorPool
             VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
             VkDevice m_device = VK_NULL_HANDLE;
 
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
         public:
             vulkanDescriptorPool() = default;

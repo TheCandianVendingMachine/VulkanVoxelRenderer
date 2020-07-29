@@ -7,9 +7,9 @@
 class vulkanAllocator
     {
         private:
-            VmaAllocator m_allocator;
+            VmaAllocator m_allocator = VK_NULL_HANDLE;
             
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
         public:
             vulkanAllocator() = default;

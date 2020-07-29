@@ -10,7 +10,7 @@ class vulkanCommandPool
             VkCommandPool m_commandPool = VK_NULL_HANDLE;
             VkDevice m_device = VK_NULL_HANDLE;
 
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
         public:
             vulkanCommandPool() = default;
             vulkanCommandPool(VkDevice device, vulkanQueueFamilyIndices queueFamilyIndices);

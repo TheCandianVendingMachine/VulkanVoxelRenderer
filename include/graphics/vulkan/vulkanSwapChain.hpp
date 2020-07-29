@@ -18,7 +18,7 @@ class vulkanSwapChain
             VkFormat m_swapChainImageFormat = VkFormat::VK_FORMAT_UNDEFINED;
             uint32_t m_imageCount = 0;
 
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
             VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &availableFormats);
             VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR> &availablePresentModes);

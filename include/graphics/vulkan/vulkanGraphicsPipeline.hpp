@@ -15,7 +15,7 @@ class vulkanGraphicsPipeline
             VkDevice m_device = VK_NULL_HANDLE;
             VkPipeline m_graphicsPipeline = VK_NULL_HANDLE;
 
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
             friend void vulkanGraphicsPipelineFunctions::createBatch(std::vector<vulkanGraphicsPipeline>&, VkDevice, const std::vector<VkGraphicsPipelineCreateInfo>&);
 

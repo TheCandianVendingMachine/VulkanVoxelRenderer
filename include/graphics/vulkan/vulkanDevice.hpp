@@ -7,7 +7,7 @@ class vulkanDevice
     {
         private:
             VkDevice m_device = VK_NULL_HANDLE;
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
         public:
             vulkanDevice() = default;

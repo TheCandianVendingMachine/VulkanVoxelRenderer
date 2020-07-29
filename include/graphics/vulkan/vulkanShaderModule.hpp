@@ -10,7 +10,7 @@ class vulkanShaderModule
             VkDevice m_device = VK_NULL_HANDLE;
             VkShaderModule m_shaderModule = VK_NULL_HANDLE;
 
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
         public:
             vulkanShaderModule() = default;
             vulkanShaderModule(VkDevice device, const std::vector<char> &code);

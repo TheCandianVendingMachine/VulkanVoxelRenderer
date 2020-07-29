@@ -10,7 +10,7 @@ class vulkanImage
             VkImage m_image = VK_NULL_HANDLE;
             VmaAllocation m_allocation = VK_NULL_HANDLE;
 
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
         public:
             vulkanImage() = default;

@@ -16,7 +16,7 @@ class vulkanDescriptorSet
             VkDescriptorSet m_descriptorSet = VK_NULL_HANDLE;
             VkDevice m_device = VK_NULL_HANDLE;
 
-            bool m_cleanedUp = false;
+            bool m_cleanedUp = true;
 
             friend void vulkanDescriptorSetFunctions::createBatch(std::vector<vulkanDescriptorSet>&, VkDevice, VkDescriptorPool, const std::vector<VkDescriptorSetLayout>&);
 
