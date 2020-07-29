@@ -8,7 +8,8 @@ void shader::load(VkDevice device, const std::string &filepath, const std::strin
         std::ifstream file(filepath, std::ios::ate | std::ios::binary);
         if (!file.is_open())
             {
-                throw std::runtime_error("failed to open file!");
+                // <error>
+                return;
             }
 
         std::size_t fileSize = (std::size_t)file.tellg();

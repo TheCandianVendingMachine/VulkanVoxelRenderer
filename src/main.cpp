@@ -5,6 +5,7 @@
 #include "graphics/renderer.hpp"
 #include "taskGraph.hpp"
 #include "clock.hpp"
+#include "random.hpp"
 #include <string>
 #include <array>
 #include <cstring>
@@ -18,6 +19,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
+#include "voxel/voxelSpace.hpp"
+
 struct mvp
     {
         alignas(16) glm::mat4 m_model;
@@ -30,212 +33,24 @@ struct transformation
         alignas(16) glm::vec3 m_position;
     };
 
-struct quad
-    {
-        glm::vec3 m_position;
-        char m_orientation = 0; // +-1 = xy, +-2 = xz, +-3 = yz
-    };
-
-void buildGeometry(const std::vector<quad> &quads, vertexBuffer &vbo, indexBuffer &ibo, const float size)
-    {
-        vertex vertexArr[4] = {};
-        vertex &v0 = vertexArr[0];
-        vertex &v1 = vertexArr[1];
-        vertex &v2 = vertexArr[2];
-        vertex &v3 = vertexArr[3];
-
-        fe::index indexArrPositive[6] = {
-            0, 1, 2, 0, 2, 3
-        };
-        fe::index indexArrNegative[6] = {
-            2, 1, 0, 3, 2, 0
-        };
-
-        glm::vec3 colours[] = {
-            { 0.23f, 0.48f, 0.34f },
-            { 0.53f, 0.81f, 0.92f },
-            { 0.37f, 0.50f, 0.22f }
-        };
-
-        for (auto &quad : quads)
-            {
-                v0.m_colour = colours[std::abs(quad.m_orientation) - 1];
-                v1.m_colour = colours[std::abs(quad.m_orientation) - 1];
-                v2.m_colour = colours[std::abs(quad.m_orientation) - 1];
-                v3.m_colour = colours[std::abs(quad.m_orientation) - 1];
-
-                switch (std::abs(quad.m_orientation))
-                    {
-                        case 1:
-                            v0.m_position.x = quad.m_position.x;
-                            v0.m_position.y = quad.m_position.y;
-                            v0.m_position.z = quad.m_position.z;
-
-                            v1.m_position.x = quad.m_position.x + size;
-                            v1.m_position.y = quad.m_position.y;
-                            v1.m_position.z = quad.m_position.z;
-
-                            v2.m_position.x = quad.m_position.x + size;
-                            v2.m_position.y = quad.m_position.y + size;
-                            v2.m_position.z = quad.m_position.z;
-
-                            v3.m_position.x = quad.m_position.x;
-                            v3.m_position.y = quad.m_position.y + size;
-                            v3.m_position.z = quad.m_position.z;
-                            break;
-                        case 2:
-                            v0.m_position.x = quad.m_position.x;
-                            v0.m_position.y = quad.m_position.z;
-                            v0.m_position.z = quad.m_position.y;
-
-                            v1.m_position.x = quad.m_position.x + size;
-                            v1.m_position.y = quad.m_position.z;
-                            v1.m_position.z = quad.m_position.y;
-
-                            v2.m_position.x = quad.m_position.x + size;
-                            v2.m_position.y = quad.m_position.z;
-                            v2.m_position.z = quad.m_position.y + size;
-
-                            v3.m_position.x = quad.m_position.x;
-                            v3.m_position.y = quad.m_position.z;
-                            v3.m_position.z = quad.m_position.y + size;
-                            break;
-                        case 3:
-                            v0.m_position.x = quad.m_position.z;
-                            v0.m_position.y = quad.m_position.x;
-                            v0.m_position.z = quad.m_position.y;
-
-                            v1.m_position.x = quad.m_position.z;
-                            v1.m_position.y = quad.m_position.x + size;
-                            v1.m_position.z = quad.m_position.y;
-
-                            v2.m_position.x = quad.m_position.z;
-                            v2.m_position.y = quad.m_position.x + size;
-                            v2.m_position.z = quad.m_position.y + size;
-
-                            v3.m_position.x = quad.m_position.z;
-                            v3.m_position.y = quad.m_position.x;
-                            v3.m_position.z = quad.m_position.y + size;
-                            break;
-                        default:
-                            break;
-                    }
-
-                vbo.addVertices(vertexArr, 4);
-                if (quad.m_orientation < 0)
-                    {
-                        ibo.addIndices(indexArrNegative, 6);
-                    }
-                else 
-                    {
-                        ibo.addIndices(indexArrPositive, 6);
-                    }
-                
-                indexArrPositive[0] += 4;
-                indexArrPositive[1] += 4;
-                indexArrPositive[2] += 4;
-                indexArrPositive[3] += 4;
-                indexArrPositive[4] += 4;
-                indexArrPositive[5] += 4;
-
-                indexArrNegative[0] += 4;
-                indexArrNegative[1] += 4;
-                indexArrNegative[2] += 4;
-                indexArrNegative[3] += 4;
-                indexArrNegative[4] += 4;
-                indexArrNegative[5] += 4;
-            }
-    }
-
 int main()
     {
+        fe::random rng;
+        rng.startUp();
+        #ifdef _DEBUG
+        rng.seed(69420);
+        #endif
+
+
+        return 0;
+
         glfwInit();
         window app(1280, 720, "Voxels!!");
 
         renderer renderer(app);
 
-        constexpr int size = 64;
-        constexpr float voxelSize = 0.16f;
-
-        char voxelArray[size][size][size];
-        std::memset(voxelArray, 1, size * size * size);
-
         vertexBuffer vbo(0, false);
         indexBuffer ibo(0, false);
-        std::vector<quad> quadVector;
-        for (int x = 0; x < size; x++)
-            {
-                for (int y = 0; y < size; y++)
-                    {
-                        for (int z = 0; z < size; z++)
-                            {
-                                if (voxelArray[x][y][z] == 0) { continue; }
-                                float posX = x * voxelSize;
-                                float posY = y * voxelSize;
-                                float posZ = z * voxelSize;
-
-                                quad q = {};
-                                // front/back plane
-                                if ((z + 1) >= size || voxelArray[x][y][z + 1] == 0)
-                                    {
-                                        q.m_orientation = 1;
-                                        q.m_position.x = posX;
-                                        q.m_position.y = posY;
-                                        q.m_position.z = posZ + voxelSize;
-                                        quadVector.push_back(q);
-                                    }
-
-                                if (z <= 0 || voxelArray[x][y][z - 1] == 0)
-                                    {
-                                        q.m_orientation = -1;
-                                        q.m_position.x = posX;
-                                        q.m_position.y = posY;
-                                        q.m_position.z = posZ;
-                                        quadVector.push_back(q);
-                                    }
-
-                                // top/bottom plane
-                                if (y <= 0 || voxelArray[x][y - 1][z] == 0)
-                                    {
-                                        q.m_orientation = 2;
-                                        q.m_position.x = posX;
-                                        q.m_position.y = posZ;
-                                        q.m_position.z = posY;
-                                        quadVector.push_back(q);
-                                    }
-
-                                if ((y + 1) >= size || voxelArray[x][y + 1][z] == 0)
-                                    {
-                                        q.m_orientation = -2;
-                                        q.m_position.x = posX;
-                                        q.m_position.y = posZ;
-                                        q.m_position.z = posY + voxelSize;
-                                        quadVector.push_back(q);
-                                    }
-
-                                // left/right plane
-                                if ((x + 1) >= size || voxelArray[x + 1][y][z] == 0)
-                                    {
-                                        q.m_orientation = 3;
-                                        q.m_position.x = posY;
-                                        q.m_position.y = posZ;
-                                        q.m_position.z = posX + voxelSize;
-                                        quadVector.push_back(q);
-                                    }
-
-                                if (x <= 0 || voxelArray[x - 1][y][z] == 0)
-                                    {
-                                        q.m_orientation = -3;
-                                        q.m_position.x = posY;
-                                        q.m_position.y = posZ;
-                                        q.m_position.z = posX;
-                                        quadVector.push_back(q);
-                                    }
-                            }
-                    }
-            }
-
-        buildGeometry(quadVector, vbo, ibo, voxelSize);
 
         uniformBuffer mvpUBO;
         uniformBuffer transformUBO;

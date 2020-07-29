@@ -56,6 +56,7 @@ namespace fe
             using uIntPtr = uInt32;
             using intPtr = int32;
         #endif
+
 		constexpr static double EPSILON = 0.0001;
         constexpr static double PI = 3.14159265359;
 
