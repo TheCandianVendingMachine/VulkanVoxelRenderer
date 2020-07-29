@@ -2,6 +2,8 @@
 #include "graphics/vertex.hpp"
 #include "graphics/quad.hpp"
 #include "typeDefines.hpp"
+#include "PerlinNoise.hpp"
+#include "random.hpp"
 #include <vector>
 
 void voxelSpace::buildGeometry(voxelChunk &chunk)
@@ -120,7 +122,61 @@ void voxelSpace::buildGeometry(voxelChunk &chunk)
 
 voxelSpace::voxelSpace()
     {
-        
+        const siv::PerlinNoise perlin(fe::random::get().generate<uint32_t>());
+        test.create(64, 64, 64);
+
+        for (int x = 0; x < test.getSizeX(); x++)
+            {
+                double nx = static_cast<double>(x) / test.getSizeX();
+                for (int y = 0; y < test.getSizeY(); y++)
+                    {
+                        double ny = static_cast<double>(y) / test.getSizeY();
+                        for (int z = 0; z < test.getSizeZ(); z++)
+                            {
+                                double nz = static_cast<double>(z) / test.getSizeZ();
+                                double noise = perlin.noise3D_0_1(nx, ny, nz);
+
+                                voxelType type = voxelType::NONE;
+                                if (noise > 0.5)
+                                    {
+                                        type = voxelType::DEFAULT;
+                                    }
+
+                                test.at(x, y, z) = type;
+                            }
+                    }
+            }
 
         buildGeometry(test);
+    }
+
+voxelSpace::~voxelSpace()
+    {
+        destroy();
+    }
+
+void voxelSpace::destroy()
+    {
+        m_vertexBuffer.destroy();
+        m_indexBuffer.destroy();
+    }
+
+const vertexBuffer &voxelSpace::getVertexBuffer() const
+    {
+        return m_vertexBuffer;
+    }
+
+vertexBuffer &voxelSpace::getVertexBuffer()
+    {
+        return m_vertexBuffer;
+    }
+
+const indexBuffer &voxelSpace::getIndexBuffer() const
+    {
+        return m_indexBuffer;
+    }
+
+indexBuffer &voxelSpace::getIndexBuffer()
+    {
+        return m_indexBuffer;
     }

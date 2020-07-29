@@ -17,12 +17,12 @@ void voxelChunk::create(voxelChunk::sizeType sizeX, voxelChunk::sizeType sizeY, 
 
 const voxelType &voxelChunk::at(voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z) const
     {
-        return m_voxelData[x + m_sizeX * (y * m_sizeZ * z)];
+        return m_voxelData[x + m_sizeX * (y + m_sizeZ * z)];
     }
 
 voxelType &voxelChunk::at(voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z)
     {
-        return m_voxelData[x + m_sizeX * (y * m_sizeZ * z)];
+        return m_voxelData[x + m_sizeX * (y + m_sizeZ * z)];
     }
 
 const voxelType &voxelChunk::at(sizeType index) const
@@ -103,20 +103,10 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                                 float posY = y * voxelSize;
                                 float posZ = z * voxelSize;
 
-                                // although this may leave the bounds of the array it shouldn't be an issue. We are only reading not writing
-                                voxelType neighbors[] = {
-                                    at(x, y, z + 1),
-                                    at(x, y, z - 1),
-                                    at(x, y - 1, z),
-                                    at(x, y + 1, z),
-                                    at(x + 1, y, z),
-                                    at(x - 1, y, z)
-                                };
-
                                 quad q = {};
                                 q.m_size = { voxelSize, voxelSize };
                                 // front/back plane
-                                if ((z + 1) >= m_sizeZ || neighbors[0] == voxelType::NONE)
+                                if ((z + 1) >= m_sizeZ || at(x, y, z + 1) == voxelType::NONE)
                                     {
                                         q.m_orientation = 1;
                                         q.m_position.x = posX;
@@ -125,7 +115,7 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                                         quads.push_back(q);
                                     }
 
-                                if (z <= 0 || neighbors[1] == voxelType::NONE)
+                                if (z <= 0 || at(x, y, z - 1) == voxelType::NONE)
                                     {
                                         q.m_orientation = -1;
                                         q.m_position.x = posX;
@@ -135,7 +125,7 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                                     }
 
                                 // top/bottom plane
-                                if (y <= 0 || neighbors[2] == voxelType::NONE)
+                                if (y <= 0 || at(x, y - 1, z) == voxelType::NONE)
                                     {
                                         q.m_orientation = 2;
                                         q.m_position.x = posX;
@@ -144,7 +134,7 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                                         quads.push_back(q);
                                     }
 
-                                if ((y + 1) >= m_sizeY || neighbors[3] == voxelType::NONE)
+                                if ((y + 1) >= m_sizeY || at(x, y + 1, z) == voxelType::NONE)
                                     {
                                         q.m_orientation = -2;
                                         q.m_position.x = posX;
@@ -154,7 +144,7 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                                     }
 
                                 // left/right plane
-                                if ((x + 1) >= m_sizeX || neighbors[4] == voxelType::NONE)
+                                if ((x + 1) >= m_sizeX || at(x + 1, y, z) == voxelType::NONE)
                                     {
                                         q.m_orientation = 3;
                                         q.m_position.x = posY;
@@ -163,7 +153,7 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                                         quads.push_back(q);
                                     }
 
-                                if (x <= 0 || neighbors[5] == voxelType::NONE)
+                                if (x <= 0 || at(x - 1, y, z) == voxelType::NONE)
                                     {
                                         q.m_orientation = -3;
                                         q.m_position.x = posY;

@@ -188,11 +188,7 @@ void renderer::cleanup()
 
 void renderer::draw(descriptorSet &descriptorSet, vertexBuffer &vbo, indexBuffer *ibo)
     {
-        renderable renderable;
-        renderable.m_descriptorSet = &descriptorSet;
-        renderable.m_vertexBuffer = &vbo;
-        renderable.m_indexBuffer = ibo;
-        m_renderables.push_back(renderable);
+        m_renderables.push_back({ &descriptorSet, &vbo, ibo });
     }
 
 void renderer::recordCommandBuffer()

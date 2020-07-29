@@ -16,5 +16,13 @@ class voxelSpace
 
         public:
             voxelSpace();
+            ~voxelSpace();
+            void destroy();
+
+            const vertexBuffer &getVertexBuffer() const;
+            vertexBuffer &getVertexBuffer();
+
+            const indexBuffer &getIndexBuffer() const;
+            indexBuffer &getIndexBuffer();
 
     };

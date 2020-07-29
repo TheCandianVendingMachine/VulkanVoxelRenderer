@@ -22,6 +22,8 @@ namespace fe
                     static random &get();
                     template<typename T>
                     T generate(T min, T max);
+                    template<typename T>
+                    T generate();
 
             };
 
@@ -40,5 +42,10 @@ namespace fe
                     }
 
                 return T();
+            }
+        template<typename T>
+        inline T random::generate()
+            {
+                return generate(std::numeric_limits<T>::min(), std::numeric_limits<T>::max());
             }
     }
