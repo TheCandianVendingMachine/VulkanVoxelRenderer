@@ -132,6 +132,7 @@ voxelSpace::voxelSpace()
 
         const siv::PerlinNoise noiseSurface(fe::random::get().generate<uint32_t>());
         test.create(256, 256, 256);
+        test.setVoxelSize(1.f);
 
         for (int x = 0; x < test.getSizeX(); x++)
             {

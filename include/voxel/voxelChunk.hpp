@@ -16,6 +16,7 @@ class voxelChunk
             sizeType m_sizeX = 0;
             sizeType m_sizeY = 0;
             sizeType m_sizeZ = 0;
+            float m_voxelSize = 1.f;
 
         public:
             voxelChunk() = default;
@@ -38,6 +39,9 @@ class voxelChunk
 
             void write(const char *file);
             void read(const char *file);
+
+            void setVoxelSize(float size);
+            float getVoxelSize() const;
 
             void mesh(std::vector<quad> &quads);
 

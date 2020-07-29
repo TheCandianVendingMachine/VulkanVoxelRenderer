@@ -88,6 +88,16 @@ void voxelChunk::read(const char *file)
         std::memcpy(m_voxels.data(), buffer.data(), buffer.size());
     }
 
+void voxelChunk::setVoxelSize(float size)
+    {
+        m_voxelSize = size;
+    }
+
+float voxelChunk::getVoxelSize() const
+    {
+        return m_voxelSize;
+    }
+
 void voxelChunk::mesh(std::vector<quad> &quads)
     {
         for (int x = 0; x < m_sizeX; x++)
@@ -96,22 +106,20 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                     {
                         for (int z = 0; z < m_sizeZ; z++)
                             {
-                                const float voxelSize = 1.f;
-
                                 if (at(x, y, z) == voxelType::NONE) { continue; }
-                                float posX = x * voxelSize;
-                                float posY = y * voxelSize;
-                                float posZ = z * voxelSize;
+                                float posX = x * m_voxelSize;
+                                float posY = y * m_voxelSize;
+                                float posZ = z * m_voxelSize;
 
                                 quad q = {};
-                                q.m_size = { voxelSize, voxelSize };
+                                q.m_size = { m_voxelSize, m_voxelSize };
                                 // front/back plane
                                 if ((z + 1) >= m_sizeZ || at(x, y, z + 1) == voxelType::NONE)
                                     {
                                         q.m_orientation = 1;
                                         q.m_position.x = posX;
                                         q.m_position.y = posY;
-                                        q.m_position.z = posZ + voxelSize;
+                                        q.m_position.z = posZ + m_voxelSize;
                                         quads.push_back(q);
                                     }
 
@@ -139,7 +147,7 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                                         q.m_orientation = -2;
                                         q.m_position.x = posX;
                                         q.m_position.y = posZ;
-                                        q.m_position.z = posY + voxelSize;
+                                        q.m_position.z = posY + m_voxelSize;
                                         quads.push_back(q);
                                     }
 
@@ -149,7 +157,7 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                                         q.m_orientation = 3;
                                         q.m_position.x = posY;
                                         q.m_position.y = posZ;
-                                        q.m_position.z = posX + voxelSize;
+                                        q.m_position.z = posX + m_voxelSize;
                                         quads.push_back(q);
                                     }
 
