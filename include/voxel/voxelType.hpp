@@ -5,5 +5,6 @@
 enum class voxelType : unsigned char
     {
         NONE,
-        DEFAULT = 64
+        DEFAULT,
+        TEST_1
     };

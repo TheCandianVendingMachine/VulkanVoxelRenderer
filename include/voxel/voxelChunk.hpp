@@ -46,4 +46,6 @@ class voxelChunk
             void mesh(std::vector<quad> &quads);
             void meshAtPosition(std::vector<quad> &quads, unsigned int x, unsigned int y, unsigned int z);
 
+            bool withinBounds(int x, int y, int z) const;
+
     };

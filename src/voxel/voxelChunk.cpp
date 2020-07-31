@@ -120,6 +120,9 @@ void voxelChunk::meshAtPosition(std::vector<quad> &quads, unsigned int x, unsign
         float posZ = z * m_voxelSize;
 
         quad q = {};
+        q.m_colour = {1.f, 1.f, 1.f};
+        if (at(x, y, z) == voxelType::TEST_1) { q.m_colour = {0.f, 0.f, 0.f}; }
+
         q.m_size = { m_voxelSize, m_voxelSize };
         // front/back plane
         if ((z + 1) >= m_sizeZ || at(x, y, z + 1) == voxelType::NONE)
@@ -177,4 +180,9 @@ void voxelChunk::meshAtPosition(std::vector<quad> &quads, unsigned int x, unsign
                 q.m_position.z = posX;
                 quads.push_back(q);
             }
+    }
+
+bool voxelChunk::withinBounds(int x, int y, int z) const
+    {
+        return (x >= 0 && x < m_sizeX) && (y >= 0 && y < m_sizeY) && (z >= 0 && z < m_sizeZ);
     }

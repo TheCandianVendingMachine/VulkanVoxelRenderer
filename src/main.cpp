@@ -26,11 +26,6 @@ struct mvp
         alignas(16) glm::mat4 m_projection;
     };
 
-struct transformation
-    {
-        alignas(16) glm::vec3 m_position;
-    };
-
 int main()
     {
         fe::random rng;
@@ -45,25 +40,22 @@ int main()
         window app(1280, 720, "Voxels!!");
 
         descriptorSettings settings;
-        settings.addSetting(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT, 1);
+        settings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT, 1);
 
         renderer renderer(app, settings);
 
-        transformation cameraPos;
-        cameraPos.m_position = { 3, -1, 0 };
-        glm::vec3 cameraDir = {1, 0, 0};
+        glm::vec3 cameraPos = { -23, -22, -2 };
+        glm::vec3 cameraDir = glm::rotate(glm::vec3(1.f, 0.f, 0.f), glm::radians(45.f), glm::vec3(0.f, -1.f, 0.f));
+        cameraDir = glm::rotate(cameraDir, glm::radians(45.f), glm::vec3(0.f, 0.f, 1.f));
         float m_cameraRotation = 0.f;
 
         mvp camera;
-        camera.m_view = glm::lookAt(cameraPos.m_position, cameraDir, glm::vec3(0.f, -1.f, 0.f));
+        camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0.f, -1.f, 0.f));
         camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, static_cast<float>(1 << 16));
         camera.m_projection[1][1] *= -1;
 
         constexpr float speed = 16.f;
         constexpr float rotationSpeed = 60.f;
-
-        transformation t;
-        t.m_position = {0, 0, 0};
 
         voxelSpace space;
         space.createWorld();
@@ -130,37 +122,37 @@ int main()
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_W))
                             {
-                                cameraPos.m_position += cameraDir * static_cast<float>(speed * updateRate);
+                                cameraPos += cameraDir * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_S))
                             {
-                                cameraPos.m_position += -cameraDir * static_cast<float>(speed * updateRate);
+                                cameraPos += -cameraDir * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_A))
                             {
-                                cameraPos.m_position += -glm::cross(cameraDir, glm::vec3(0, -1.f, 0)) * static_cast<float>(speed * updateRate);
+                                cameraPos += -glm::cross(cameraDir, glm::vec3(0, -1.f, 0)) * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_D))
                             {
-                                cameraPos.m_position += glm::cross(cameraDir, glm::vec3(0, -1.f, 0)) * static_cast<float>(speed * updateRate);
+                                cameraPos += glm::cross(cameraDir, glm::vec3(0, -1.f, 0)) * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_Q))
                             {
-                                cameraPos.m_position.y += -speed * updateRate;
+                                cameraPos.y += -speed * updateRate;
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_Z))
                             {
-                                cameraPos.m_position.y += speed * updateRate;
+                                cameraPos.y += speed * updateRate;
                                 keyPressed = true;
                             }
 
@@ -191,9 +183,10 @@ int main()
 
                 if (keyPressed)
                     {
-                        camera.m_view = glm::lookAt(cameraPos.m_position, cameraPos.m_position + cameraDir, glm::vec3(0, -1.f, 0));
+                        camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0, -1.f, 0));
                         mvpUBO.bind(camera);
                     }
+                space.raycast(cameraPos, cameraDir);
 
                 renderer.draw(*voxelSpaceDescriptor, space.getVertexBuffer(), &space.getIndexBuffer());
 

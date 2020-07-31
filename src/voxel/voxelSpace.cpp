@@ -35,10 +35,10 @@ void voxelSpace::buildGeometry(voxelChunk &chunk)
 
         for (auto &quad : quads)
             {
-                v0.m_colour = colours[std::abs(quad.m_orientation) - 1];
-                v1.m_colour = colours[std::abs(quad.m_orientation) - 1];
-                v2.m_colour = colours[std::abs(quad.m_orientation) - 1];
-                v3.m_colour = colours[std::abs(quad.m_orientation) - 1];
+                v0.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
+                v1.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
+                v2.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
+                v3.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
 
                 switch (std::abs(quad.m_orientation))
                     {
@@ -285,4 +285,93 @@ indexBuffer &voxelSpace::getIndexBuffer()
 glm::mat4 voxelSpace::getModelTransformation() const
     {
         return m_translation * glm::toMat4(m_quaternion);
+    }
+
+glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 direction)
+    {
+        constexpr float gridOffset = 0.000001f;
+
+        glm::vec3 worldPosition = getModelTransformation() * glm::vec4(origin, 0.f);
+        glm::vec<3, int> gridPosition = worldPosition / test.getVoxelSize();
+
+        glm::vec3 deltaDistance = glm::abs(1.f / direction);
+        glm::vec3 sideDistance;
+        glm::vec<3, int> step;
+
+        if (direction.x < 0.f)
+            {
+                step.x = -1;
+                sideDistance.x = (worldPosition.x - gridPosition.x) * deltaDistance.x;
+            }
+        else
+            {
+                step.x = 1;
+                sideDistance.x = (gridPosition.x + gridOffset - worldPosition.x) * deltaDistance.x;
+            }
+
+        if (direction.y < 0.f)
+            {
+                step.y = -1;
+                sideDistance.y = (worldPosition.y - gridPosition.y) * deltaDistance.y;
+            }
+        else
+            {
+                step.y = 1;
+                sideDistance.y = (gridPosition.y + gridOffset - worldPosition.y) * deltaDistance.y;
+            }
+
+        if (direction.z < 0.f)
+            {
+                step.z = -1;
+                sideDistance.z = (worldPosition.z - gridPosition.z) * deltaDistance.z;
+            }
+        else
+            {
+                step.z = 1;
+                sideDistance.z = (gridPosition.z + gridOffset - worldPosition.z) * deltaDistance.z;
+            }
+
+        int stepCount = 0;
+        const int maxStepCount = test.getSizeX() + test.getSizeY() + test.getSizeZ();
+        while (stepCount++ <= maxStepCount)
+            {
+                if (sideDistance.x < sideDistance.z)
+                    {
+                        if (sideDistance.y < sideDistance.x)
+                            {
+                                sideDistance.y += deltaDistance.y;
+                                gridPosition.y += step.y;
+                            }
+                        else
+                            {
+                                sideDistance.x += deltaDistance.x;
+                                gridPosition.x += step.x;
+                            }
+                    }
+                else
+                    {
+                        if (sideDistance.y < sideDistance.z)
+                            {
+                                sideDistance.y += deltaDistance.y;
+                                gridPosition.y += step.y;
+                            }
+                        else
+                            {
+                                sideDistance.z += deltaDistance.z;
+                                gridPosition.z += step.z;
+                            }
+                    }
+
+                if (test.withinBounds(gridPosition.x, gridPosition.y, gridPosition.z))
+                    {
+                        voxelType type = test.at(gridPosition.x, gridPosition.y, gridPosition.z);
+                        if (type != voxelType::NONE)
+                            {
+                                test.at(gridPosition.x, gridPosition.y, gridPosition.z) = voxelType::TEST_1;
+                                return gridPosition;
+                            }
+                    }
+            }
+
+        return {};
     }

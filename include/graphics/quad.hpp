@@ -7,6 +7,7 @@
 struct quad
     {
         glm::vec3 m_position;
+        glm::vec3 m_colour;
         glm::vec2 m_size;
         char m_orientation = 0; // +-1 = xy, +-2 = xz, +-3 = yz
     };

@@ -36,4 +36,6 @@ class voxelSpace
 
             glm::mat4 getModelTransformation() const;
 
+            glm::vec<3, int> raycast(const glm::vec3 origin, const glm::vec3 direction);
+
     };
