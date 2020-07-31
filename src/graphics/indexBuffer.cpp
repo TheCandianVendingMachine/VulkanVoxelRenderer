@@ -30,6 +30,9 @@ void indexBuffer::destroy()
     {
         m_indexBuffer.cleanup();
         m_stagingIndexBuffer.cleanup();
+        m_indices.clear();
+        m_size = 0;
+        m_bufferSize = 0;
     }
 
 void indexBuffer::addIndex(fe::index index)
@@ -49,11 +52,19 @@ void indexBuffer::addIndices(fe::index *indices, std::size_t count)
         m_updated = true;
     }
 
+void indexBuffer::modifyIndex(unsigned int position, fe::index newIndex)
+    {
+        m_indices[position] = newIndex;
+        m_updated = true;
+    }
+
 void indexBuffer::updateBuffer(vulkanCommandBuffer &commandBuffer)
     {
+        if (m_indices.empty()) { m_updated = false; return; }
         if (m_indices.size() > m_size)
             {
-                destroy();
+                m_indexBuffer.cleanup();
+                m_stagingIndexBuffer.cleanup();
                 create(m_indices.size(), m_dynamic);
             }
 

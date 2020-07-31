@@ -30,6 +30,9 @@ void vertexBuffer::destroy()
     {
         m_vertexBuffer.cleanup();
         m_stagingVertexBuffer.cleanup();
+        m_vertices.clear();
+        m_size = 0;
+        m_bufferSize = 0;
     }
 
 void vertexBuffer::addVertex(vertex vertex)
@@ -49,11 +52,19 @@ void vertexBuffer::addVertices(vertex *vertices, std::size_t count)
         m_updated = true;
     }
 
+void vertexBuffer::modifyVertex(unsigned int index, vertex newVertex)
+    {
+        m_vertices[index] = newVertex;
+        m_updated = true;
+    }
+
 void vertexBuffer::updateBuffer(vulkanCommandBuffer &commandBuffer)
     {
+        if (m_vertices.empty()) { m_updated = false; return; }
         if (m_vertices.size() > m_size)
             {
-                destroy();
+                m_vertexBuffer.cleanup();
+                m_stagingVertexBuffer.cleanup();
                 create(m_vertices.size(), m_dynamic);
             }
 

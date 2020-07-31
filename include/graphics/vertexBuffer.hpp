@@ -28,6 +28,7 @@ class vertexBuffer
             
             void addVertex(vertex vertex);
             void addVertices(vertex *vertices, std::size_t count);
+            void modifyVertex(unsigned int index, vertex newVertex);
 
             void updateBuffer(vulkanCommandBuffer &commandBuffer);
             bool needsUpdate() const;

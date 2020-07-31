@@ -9,11 +9,28 @@
 #include <array>
 #include <glm/gtx/quaternion.hpp>
 
+void voxelSpace::buildGeometryAtPosition(voxelChunk &chunk, unsigned int x, unsigned int y, unsigned int z)
+    {
+        std::vector<quad> quads;
+        test.meshAtPosition(quads, x, y, z);
+        test.meshAtPosition(quads, x - 1, y, z);
+        test.meshAtPosition(quads, x + 1, y, z);
+        test.meshAtPosition(quads, x, y - 1, z);
+        test.meshAtPosition(quads, x, y + 1, z);
+        test.meshAtPosition(quads, x, y, z - 1);
+        test.meshAtPosition(quads, x, y, z + 1);
+    }
+
 void voxelSpace::buildGeometry(voxelChunk &chunk)
     {
         std::vector<quad> quads;
         chunk.mesh(quads);
 
+        buildGeometry(quads);
+    }
+
+void voxelSpace::buildGeometry(const std::vector<quad> &quads)
+    {
         vertex vertexArr[4] = {};
         vertex &v0 = vertexArr[0];
         vertex &v1 = vertexArr[1];
@@ -229,7 +246,7 @@ void voxelSpace::createWorld()
         }};
 
         const siv::PerlinNoise noiseSurface(fe::random::get().generate<uint32_t>());
-        test.create(64, 64, 64);
+        test.create(48, 48, 48);
 
         for (int x = 0; x < test.getSizeX(); x++)
             {
@@ -368,6 +385,8 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
                         if (type != voxelType::NONE)
                             {
                                 test.at(gridPosition.x, gridPosition.y, gridPosition.z) = voxelType::TEST_1;
+                                buildGeometryAtPosition(test, gridPosition.x, gridPosition.y, gridPosition.z);
+
                                 return gridPosition;
                             }
                     }

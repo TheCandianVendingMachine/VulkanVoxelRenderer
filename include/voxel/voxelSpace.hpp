@@ -18,7 +18,9 @@ class voxelSpace
             glm::mat4 m_translation;
             glm::quat m_quaternion;
 
+            void buildGeometryAtPosition(voxelChunk &chunk, unsigned int x, unsigned int y, unsigned int z);
             void buildGeometry(voxelChunk &chunk);
+            void buildGeometry(const std::vector<quad> &quads);
 
         public:
             voxelSpace() = default;

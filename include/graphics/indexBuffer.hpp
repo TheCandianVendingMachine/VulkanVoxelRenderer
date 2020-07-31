@@ -28,6 +28,7 @@ class indexBuffer
             
             void addIndex(fe::index index);
             void addIndices(fe::index *indices, std::size_t count);
+            void modifyIndex(unsigned int position, fe::index newIndex);
 
             void updateBuffer(vulkanCommandBuffer &commandBuffer);
             bool needsUpdate() const;

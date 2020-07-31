@@ -186,6 +186,7 @@ int main()
                         camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0, -1.f, 0));
                         mvpUBO.bind(camera);
                     }
+                vkDeviceWaitIdle(renderer.getDevice());
                 space.raycast(cameraPos, cameraDir);
 
                 renderer.draw(*voxelSpaceDescriptor, space.getVertexBuffer(), &space.getIndexBuffer());
