@@ -106,70 +106,75 @@ void voxelChunk::mesh(std::vector<quad> &quads)
                     {
                         for (int z = 0; z < m_sizeZ; z++)
                             {
-                                if (at(x, y, z) == voxelType::NONE) { continue; }
-                                float posX = x * m_voxelSize;
-                                float posY = y * m_voxelSize;
-                                float posZ = z * m_voxelSize;
-
-                                quad q = {};
-                                q.m_size = { m_voxelSize, m_voxelSize };
-                                // front/back plane
-                                if ((z + 1) >= m_sizeZ || at(x, y, z + 1) == voxelType::NONE)
-                                    {
-                                        q.m_orientation = 1;
-                                        q.m_position.x = posX;
-                                        q.m_position.y = posY;
-                                        q.m_position.z = posZ + m_voxelSize;
-                                        quads.push_back(q);
-                                    }
-
-                                if (z <= 0 || at(x, y, z - 1) == voxelType::NONE)
-                                    {
-                                        q.m_orientation = -1;
-                                        q.m_position.x = posX;
-                                        q.m_position.y = posY;
-                                        q.m_position.z = posZ;
-                                        quads.push_back(q);
-                                    }
-
-                                // top/bottom plane
-                                if (y <= 0 || at(x, y - 1, z) == voxelType::NONE)
-                                    {
-                                        q.m_orientation = 2;
-                                        q.m_position.x = posX;
-                                        q.m_position.y = posZ;
-                                        q.m_position.z = posY;
-                                        quads.push_back(q);
-                                    }
-
-                                if ((y + 1) >= m_sizeY || at(x, y + 1, z) == voxelType::NONE)
-                                    {
-                                        q.m_orientation = -2;
-                                        q.m_position.x = posX;
-                                        q.m_position.y = posZ;
-                                        q.m_position.z = posY + m_voxelSize;
-                                        quads.push_back(q);
-                                    }
-
-                                // left/right plane
-                                if ((x + 1) >= m_sizeX || at(x + 1, y, z) == voxelType::NONE)
-                                    {
-                                        q.m_orientation = 3;
-                                        q.m_position.x = posY;
-                                        q.m_position.y = posZ;
-                                        q.m_position.z = posX + m_voxelSize;
-                                        quads.push_back(q);
-                                    }
-
-                                if (x <= 0 || at(x - 1, y, z) == voxelType::NONE)
-                                    {
-                                        q.m_orientation = -3;
-                                        q.m_position.x = posY;
-                                        q.m_position.y = posZ;
-                                        q.m_position.z = posX;
-                                        quads.push_back(q);
-                                    }
+                                meshAtPosition(quads, x, y, z);
                             }
                     }
+            }
+    }
+
+void voxelChunk::meshAtPosition(std::vector<quad> &quads, unsigned int x, unsigned int y, unsigned int z)
+    {
+        if (at(x, y, z) == voxelType::NONE) { return; }
+        float posX = x * m_voxelSize;
+        float posY = y * m_voxelSize;
+        float posZ = z * m_voxelSize;
+
+        quad q = {};
+        q.m_size = { m_voxelSize, m_voxelSize };
+        // front/back plane
+        if ((z + 1) >= m_sizeZ || at(x, y, z + 1) == voxelType::NONE)
+            {
+                q.m_orientation = 1;
+                q.m_position.x = posX;
+                q.m_position.y = posY;
+                q.m_position.z = posZ + m_voxelSize;
+                quads.push_back(q);
+            }
+
+        if (z <= 0 || at(x, y, z - 1) == voxelType::NONE)
+            {
+                q.m_orientation = -1;
+                q.m_position.x = posX;
+                q.m_position.y = posY;
+                q.m_position.z = posZ;
+                quads.push_back(q);
+            }
+
+        // top/bottom plane
+        if (y <= 0 || at(x, y - 1, z) == voxelType::NONE)
+            {
+                q.m_orientation = 2;
+                q.m_position.x = posX;
+                q.m_position.y = posZ;
+                q.m_position.z = posY;
+                quads.push_back(q);
+            }
+
+        if ((y + 1) >= m_sizeY || at(x, y + 1, z) == voxelType::NONE)
+            {
+                q.m_orientation = -2;
+                q.m_position.x = posX;
+                q.m_position.y = posZ;
+                q.m_position.z = posY + m_voxelSize;
+                quads.push_back(q);
+            }
+
+        // left/right plane
+        if ((x + 1) >= m_sizeX || at(x + 1, y, z) == voxelType::NONE)
+            {
+                q.m_orientation = 3;
+                q.m_position.x = posY;
+                q.m_position.y = posZ;
+                q.m_position.z = posX + m_voxelSize;
+                quads.push_back(q);
+            }
+
+        if (x <= 0 || at(x - 1, y, z) == voxelType::NONE)
+            {
+                q.m_orientation = -3;
+                q.m_position.x = posY;
+                q.m_position.y = posZ;
+                q.m_position.z = posX;
+                quads.push_back(q);
             }
     }

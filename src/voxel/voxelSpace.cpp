@@ -1,11 +1,13 @@
 #include "voxel/voxelSpace.hpp"
 #include "graphics/vertex.hpp"
 #include "graphics/quad.hpp"
+#include "graphics/descriptorSet.hpp"
 #include "typeDefines.hpp"
 #include "PerlinNoise.hpp"
 #include "random.hpp"
 #include <vector>
 #include <array>
+#include <glm/gtx/quaternion.hpp>
 
 void voxelSpace::buildGeometry(voxelChunk &chunk)
     {
@@ -121,11 +123,108 @@ void voxelSpace::buildGeometry(voxelChunk &chunk)
             }
     }
 
-voxelSpace::voxelSpace()
-    {   
+voxelSpace::~voxelSpace()
+    {
+        destroy();
+    }
+
+void voxelSpace::create()
+    {
+    }
+
+void voxelSpace::destroy()
+    {
+        m_vertexBuffer.destroy();
+        m_indexBuffer.destroy();
+    }
+
+std::vector<float> noiseMapGenerator(int sizeX, int sizeY, int sizeZ, int seed, float scale, int octaves, float persistance, float lacunarity, glm::vec3 offset)
+    {
+        std::vector<float> noise(sizeX * sizeY * sizeZ);
+        const siv::PerlinNoise noiseGenerator(seed);
+
+        std::vector<glm::vec3> octaveOffsets(octaves);
+        for (int i = 0; i < octaves; octaves++)
+            {
+                float offsetX = fe::random::get().generate(-100000.f, 100000.f) + offset.x;
+                float offsetY = fe::random::get().generate(-100000.f, 100000.f) + offset.y;
+                float offsetZ = fe::random::get().generate(-100000.f, 100000.f) + offset.z;
+
+                octaveOffsets[i] = { offsetX, offsetY, offsetZ };
+            }
+
+        if (scale <= 0.f)
+            {
+                scale = 0.000000001f;
+            }
+
+        float maxNoiseHeight = std::numeric_limits<float>::min();
+        float minNoiseHeight = std::numeric_limits<float>::max();
+
+        float halfWidth = static_cast<float>(sizeX) / 2.f;
+        float halfHeight = static_cast<float>(sizeY) / 2.f;
+        float halfDepth = static_cast<float>(sizeZ) / 2.f;
+
+        for (int y = 0; y < sizeY; y++)
+            {
+                for (int z = 0; z < sizeZ; z++)
+                    {
+                        for (int x = 0; x < sizeX; x++)
+                            {
+                                float amplitude = 1.f;
+                                float frequency = 1.f;
+                                float noiseHeight = 0.f;
+
+                                for (int i = 0; i < octaves; i++)
+                                    {
+                                        float sampleX = (x - halfWidth) / scale * frequency + octaveOffsets[i].x;
+                                        float sampleY = (y - halfHeight) / scale * frequency + octaveOffsets[i].y;
+                                        float sampleZ = (z - halfDepth) / scale * frequency + octaveOffsets[i].z;
+
+                                        float perlinValue = noiseGenerator.noise3D(sampleX, sampleY, sampleZ);
+                                        noiseHeight += perlinValue * amplitude;
+
+                                        amplitude += persistance;
+                                        frequency += lacunarity;
+                                    }
+
+                                if (noiseHeight > maxNoiseHeight)
+                                    {
+                                        maxNoiseHeight = noiseHeight;
+                                    }
+                                if (noiseHeight < minNoiseHeight)
+                                    {
+                                        minNoiseHeight = noiseHeight;
+                                    }
+
+                                noise[x + sizeX * (y + sizeZ * z)] = noiseHeight;
+                            }
+                    }
+            }
+
+        for (int y = 0; y < sizeY; y++)
+            {
+                for (int z = 0; z < sizeZ; z++)
+                    {
+                        for (int x = 0; x < sizeX; x++)
+                            {
+                                float currentNoise = noise[x + sizeX * (y + sizeZ * z)];
+                                // inverse lerp: (v - a) / (a - b)
+                                currentNoise = (currentNoise - minNoiseHeight) / (maxNoiseHeight - minNoiseHeight);
+
+                                noise[x + sizeX * (y + sizeZ * z)] = currentNoise;
+                            }
+                    }
+            }
+
+        return noise;
+    }
+
+void voxelSpace::createWorld()
+    {
         double globalFrequency = 0.85;
-        std::array<std::array<double, 2>, 3> surfaceFrequencies = {{
-            {{ 1.0, 1.0 }},
+        std::array<std::array<double, 2>, 2> surfaceFrequencies = {{
+            {{ 1.0, 1.5 }},
             {{ 0.2, 4.0 }},
         }};
 
@@ -158,17 +257,9 @@ voxelSpace::voxelSpace()
             }
 
         buildGeometry(test);
-    }
 
-voxelSpace::~voxelSpace()
-    {
-        destroy();
-    }
-
-void voxelSpace::destroy()
-    {
-        m_vertexBuffer.destroy();
-        m_indexBuffer.destroy();
+        m_translation = glm::translate(glm::mat4(1.f), glm::vec3{0.f, 0.f, 0.f});
+        m_quaternion = glm::angleAxis(0.f, glm::normalize(glm::vec3{ 0, 1.f, 0.f }));
     }
 
 const vertexBuffer &voxelSpace::getVertexBuffer() const
@@ -189,4 +280,9 @@ const indexBuffer &voxelSpace::getIndexBuffer() const
 indexBuffer &voxelSpace::getIndexBuffer()
     {
         return m_indexBuffer;
+    }
+
+glm::mat4 voxelSpace::getModelTransformation() const
+    {
+        return m_translation * glm::toMat4(m_quaternion);
     }
