@@ -16,6 +16,7 @@ class vulkanSubpass;
 class vulkanAttachmentList;
 class vulkanPhysicalDevice;
 class vulkanDevice;
+class descriptorSettings;
 class renderSurface
     {
         private:
@@ -33,6 +34,7 @@ class renderSurface
                 vulkanPhysicalDevice &physicalDevice, 
                 VkSurfaceKHR surface, 
                 const GLFWwindow &window,
+                descriptorSettings &settings,
                 std::function<void(std::vector<vulkanSubpass>&, vulkanAttachmentList&)> renderPassInit,
                 std::function<void(std::vector<VkPipelineShaderStageCreateInfo>&, VkPipelineVertexInputStateCreateInfo&, VkPipelineInputAssemblyStateCreateInfo&, VkPipelineTessellationStateCreateInfo&, VkPipelineMultisampleStateCreateInfo&, VkPipelineDepthStencilStateCreateInfo&, VkPipelineDynamicStateCreateInfo&)> graphicsPipelineInit
             );

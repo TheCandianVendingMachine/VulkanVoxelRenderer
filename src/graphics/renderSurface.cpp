@@ -10,7 +10,8 @@ void renderSurface::create(
     vulkanDevice &device,
     vulkanPhysicalDevice &physicalDevice,
     VkSurfaceKHR surface, 
-    const GLFWwindow &window, 
+    const GLFWwindow &window,
+    descriptorSettings &settings,
     std::function<void(std::vector<vulkanSubpass>&, vulkanAttachmentList&)> renderPassInit, 
     std::function<void(std::vector<VkPipelineShaderStageCreateInfo>&, VkPipelineVertexInputStateCreateInfo&, VkPipelineInputAssemblyStateCreateInfo&, VkPipelineTessellationStateCreateInfo&, VkPipelineMultisampleStateCreateInfo&, VkPipelineDepthStencilStateCreateInfo&, VkPipelineDynamicStateCreateInfo&)> graphicsPipelineInit
 )
@@ -18,7 +19,7 @@ void renderSurface::create(
         m_swapChain.create(device, physicalDevice, surface, window);
         m_renderPass.create(device, physicalDevice, m_swapChain, renderPassInit);
 
-        m_descriptorHandler.create(device, static_cast<unsigned int>(m_swapChain.getImageViews().size()));
+        m_descriptorHandler.create(device, static_cast<unsigned int>(m_swapChain.getImageViews().size()), settings);
 
         m_pipelineLayout.create(device, { m_descriptorHandler.getDescriptorSetLayout() });
 

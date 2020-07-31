@@ -22,6 +22,7 @@
 #include "graphics/descriptorSet.hpp"
 
 class window;
+class descriptorSettings;
 class renderer
     {
         private:
@@ -60,7 +61,7 @@ class renderer
             void recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer);
 
         public:
-            renderer(window &app);
+            renderer(window &app, descriptorSettings &settings);
             ~renderer();
 
             void cleanup();

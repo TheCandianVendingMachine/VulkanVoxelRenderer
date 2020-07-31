@@ -12,6 +12,7 @@
 
 #include "graphics/uniformBuffer.hpp"
 #include "graphics/descriptorSet.hpp"
+#include "graphics/descriptorSettings.hpp"
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/rotate_vector.hpp>
@@ -40,15 +41,13 @@ int main()
         rng.randomSeed();
         #endif
 
-        voxelSpace space;
-
         glfwInit();
         window app(1280, 720, "Voxels!!");
 
-        renderer renderer(app);
+        descriptorSettings settings;
+        settings.addSetting(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT, 1);
 
-        uniformBuffer mvpUBO;
-        uniformBuffer transformUBO;
+        renderer renderer(app, settings);
 
         transformation cameraPos;
         cameraPos.m_position = { 3, -1, 0 };
@@ -56,7 +55,6 @@ int main()
         float m_cameraRotation = 0.f;
 
         mvp camera;
-        camera.m_model = glm::rotate(glm::mat4(1.f), glm::radians(m_cameraRotation), glm::vec3(0.f, 1.f, 0.f));
         camera.m_view = glm::lookAt(cameraPos.m_position, cameraDir, glm::vec3(0.f, -1.f, 0.f));
         camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, static_cast<float>(1 << 16));
         camera.m_projection[1][1] *= -1;
@@ -67,13 +65,15 @@ int main()
         transformation t;
         t.m_position = {0, 0, 0};
 
-        mvpUBO.create(camera);
-        transformUBO.create(t);
+        voxelSpace space;
+        space.createWorld();
 
-        descriptorSet *ds = renderer.createDescriptorSet();
-        ds->bindUBO(mvpUBO.getUniformBuffer(), mvpUBO.getBufferSize());
-        ds->bindUBO(transformUBO.getUniformBuffer(), transformUBO.getBufferSize());
-        ds->update();
+        camera.m_model = space.getModelTransformation();
+
+        uniformBuffer mvpUBO(camera);
+
+        descriptorSet *voxelSpaceDescriptor = renderer.createDescriptorSet();
+        voxelSpaceDescriptor->bindUBO(mvpUBO.getUniformBuffer(), mvpUBO.getBufferSize());
 
         taskGraph taskGraph(1, 10);
 
@@ -195,7 +195,7 @@ int main()
                         mvpUBO.bind(camera);
                     }
 
-                renderer.draw(*ds, space.getVertexBuffer(), &space.getIndexBuffer());
+                renderer.draw(*voxelSpaceDescriptor, space.getVertexBuffer(), &space.getIndexBuffer());
 
                 renderer.recordCommandBuffer();
                 taskGraph.execute();
@@ -209,7 +209,6 @@ int main()
 
         space.destroy();
         mvpUBO.destroy();
-        transformUBO.destroy();
 
         renderer.cleanup();
         app.cleanup();

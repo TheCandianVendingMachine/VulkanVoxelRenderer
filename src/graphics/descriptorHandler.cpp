@@ -2,31 +2,15 @@
 #include "graphics/vulkan/vulkanDevice.hpp"
 #include <vector>
 
-void descriptorHandler::create(vulkanDevice &device, unsigned int swapChainImageCount)
+void descriptorHandler::create(vulkanDevice &device, unsigned int swapChainImageCount, descriptorSettings &settings)
     {
-        // if you change the order of descriptors here, change it in descriptorSet as well
-        VkDescriptorSetLayoutBinding mvpBinding{};
-        mvpBinding.binding = 0;
-        mvpBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        mvpBinding.descriptorCount = 1;
-        mvpBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        mvpBinding.pImmutableSamplers = nullptr;
+        m_settings = std::move(settings);
+        m_descriptorSetLayout.create(device, m_settings.getLayoutBindings());
 
-        VkDescriptorSetLayoutBinding transformBinding{};
-        transformBinding.binding = 1;
-        transformBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        transformBinding.descriptorCount = 1;
-        transformBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        transformBinding.pImmutableSamplers = nullptr;
-
-        m_descriptorSetLayout.create(device, { mvpBinding, transformBinding });
-
-        std::vector<VkDescriptorPoolSize> poolSizes(2);
+        std::vector<VkDescriptorPoolSize> poolSizes(1);
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImageCount); // how many of this type to allocate
-        poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(swapChainImageCount); // how many of this type to allocate
-        m_descriptorPool.create(device, c_maxSets * swapChainImageCount, poolSizes);
+        m_descriptorPool.create(device, c_maxSets * swapChainImageCount, m_settings.getPoolSizes(swapChainImageCount));
 
         m_device = &device;
         m_swapChainImageCount = swapChainImageCount;
@@ -49,7 +33,7 @@ descriptorSet *descriptorHandler::createDescriptorSet()
 
         m_allocatedDescriptorSets.emplace_back(std::make_unique<descriptorSet>());
         returnDescriptorSets = m_allocatedDescriptorSets.back().get();
-        returnDescriptorSets->create(m_swapChainImageCount, *m_device, m_descriptorPool, layouts);
+        returnDescriptorSets->create(m_swapChainImageCount, *m_device, m_descriptorPool, layouts, m_settings);
 
         return returnDescriptorSets;
     }

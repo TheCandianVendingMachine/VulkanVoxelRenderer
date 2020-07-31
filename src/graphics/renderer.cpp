@@ -49,7 +49,7 @@ void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
             }
     }
 
-renderer::renderer(window &app)
+renderer::renderer(window &app, descriptorSettings &settings)
     {
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -80,7 +80,8 @@ renderer::renderer(window &app)
         frag.load(m_device, "shaders/frag.spv");
         vert.load(m_device, "shaders/vert.spv");
 
-        m_surface.create(m_device, m_physicalDevice, m_windowSurface, *app.getUnderlyingWindow(), [](std::vector<vulkanSubpass> &subpasses, vulkanAttachmentList &attachmentList){},
+        m_surface.create(m_device, m_physicalDevice, m_windowSurface, *app.getUnderlyingWindow(), settings, 
+            [](std::vector<vulkanSubpass> &subpasses, vulkanAttachmentList &attachmentList){},
             [this, &frag, &vert](std::vector<VkPipelineShaderStageCreateInfo> &shaderStages, VkPipelineVertexInputStateCreateInfo &vertexInputInfo, VkPipelineInputAssemblyStateCreateInfo &inputAssembly, VkPipelineTessellationStateCreateInfo&, VkPipelineMultisampleStateCreateInfo &multisampling, VkPipelineDepthStencilStateCreateInfo &depthStencil, VkPipelineDynamicStateCreateInfo&){
                 VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
                 vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

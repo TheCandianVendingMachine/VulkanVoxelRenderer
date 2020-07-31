@@ -10,6 +10,7 @@ class vulkanDescriptorPool;
 class vulkanImageView;
 class vulkanSampler;
 class vulkanBuffer;
+class descriptorSettings;
 class descriptorSet
     {
         private:
@@ -18,10 +19,11 @@ class descriptorSet
             VkDescriptorImageInfo m_imageInfo;
             bool m_needsUpdate = false;
 
+            const descriptorSettings *m_settings = nullptr;
             vulkanDevice *m_device = nullptr;
 
         public:
-            void create(unsigned int swapChainImageCount, vulkanDevice &device, vulkanDescriptorPool &descriptorPool, std::vector<VkDescriptorSetLayout> &layouts);
+            void create(unsigned int swapChainImageCount, vulkanDevice &device, vulkanDescriptorPool &descriptorPool, std::vector<VkDescriptorSetLayout> &layouts, const descriptorSettings &settings);
             void cleanup();
 
             void bindImage(const vulkanImageView &imageView, const vulkanSampler &imageSampler);

@@ -4,13 +4,15 @@
 #include "graphics/vulkan/vulkanImageView.hpp"
 #include "graphics/vulkan/vulkanSampler.hpp"
 #include "graphics/vulkan/vulkanBuffer.hpp"
+#include "graphics/descriptorSettings.hpp"
 #include <array>
 
-void descriptorSet::create(unsigned int swapChainImageCount, vulkanDevice &device, vulkanDescriptorPool &descriptorPool, std::vector<VkDescriptorSetLayout> &layouts)
+void descriptorSet::create(unsigned int swapChainImageCount, vulkanDevice &device, vulkanDescriptorPool &descriptorPool, std::vector<VkDescriptorSetLayout> &layouts, const descriptorSettings &settings)
     {
         m_descriptorSets.resize(swapChainImageCount);
         vulkanDescriptorSetFunctions::createBatch(m_descriptorSets, device, descriptorPool, layouts);
         m_device = &device;
+        m_settings = &settings;
     }
 
 void descriptorSet::cleanup()
@@ -50,20 +52,22 @@ void descriptorSet::update()
             {
                 VkDescriptorSet descriptorSet = m_descriptorSets[i];
 
-                std::vector<VkWriteDescriptorSet> descriptorWrites;
-                for (unsigned int i = 0; i < m_bufferInfo.size(); i++)
+                std::vector<VkWriteDescriptorSet> descriptorWrites = m_settings->getDescriptorWrites();
+                unsigned int bufferIndex = 0;
+                for (auto &write : descriptorWrites)
                     {
-                        descriptorWrites.emplace_back();
-                        descriptorWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                        descriptorWrites[i].dstSet = descriptorSet;
-                        descriptorWrites[i].dstBinding = i;
-                        descriptorWrites[i].dstArrayElement = 0;
-                        descriptorWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                        descriptorWrites[i].descriptorCount = 1;
-                        descriptorWrites[i].pBufferInfo = &m_bufferInfo[i];
-                        descriptorWrites[i].pImageInfo = nullptr;
-                        descriptorWrites[i].pTexelBufferView = nullptr;
-                        descriptorWrites[i].pNext = nullptr;
+                        write.dstSet = descriptorSet;
+                        switch (write.descriptorType)
+                            {
+                                case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+                                    write.pBufferInfo = &m_bufferInfo[bufferIndex++];
+                                    break;
+                                case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                                    write.pImageInfo = &m_imageInfo;
+                                    break;
+                                default:
+                                    break;
+                            }
                     }
 
                 vkUpdateDescriptorSets(m_device->getUnderlyingDevice(), static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);

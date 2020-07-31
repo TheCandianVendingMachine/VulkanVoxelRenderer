@@ -4,10 +4,12 @@
 #include <vector>
 #include <memory>
 #include "descriptorSet.hpp"
+#include "descriptorSettings.hpp"
 #include "graphics/vulkan/vulkanDescriptorSetLayout.hpp"
 #include "graphics/vulkan/vulkanDescriptorPool.hpp"
 
 class vulkanDevice;
+class descriptorSettings;
 class descriptorHandler
     {
         private:
@@ -17,11 +19,12 @@ class descriptorHandler
             vulkanDescriptorSetLayout m_descriptorSetLayout;
             vulkanDescriptorPool m_descriptorPool;
             vulkanDevice *m_device = nullptr;
+            descriptorSettings m_settings;
 
             std::vector<std::unique_ptr<descriptorSet>> m_allocatedDescriptorSets;
 
         public:
-            void create(vulkanDevice &device, unsigned int swapChainImageCount);
+            void create(vulkanDevice &device, unsigned int swapChainImageCount, descriptorSettings &settings);
             void cleanup();
 
             descriptorSet *createDescriptorSet();
