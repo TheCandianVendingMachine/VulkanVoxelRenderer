@@ -43,3 +43,13 @@ vulkanDescriptorSetLayout &descriptorHandler::getDescriptorSetLayout()
         return m_descriptorSetLayout;
     }
 
+const vulkanDescriptorPool &descriptorHandler::getDescriptorPool() const
+    {
+        return m_descriptorPool;
+    }
+
+vulkanDescriptorPool &descriptorHandler::getDescriptorPool()
+    {
+        return m_descriptorPool;
+    }
+

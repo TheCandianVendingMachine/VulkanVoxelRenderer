@@ -19,6 +19,8 @@
 
 #include "voxel/voxelSpace.hpp"
 
+#include "imgui.h"
+
 struct mvp
     {
         alignas(16) glm::mat4 m_model;
@@ -36,6 +38,7 @@ int main()
         rng.randomSeed();
         #endif
 
+        // we install keyboard callbacks in ImGui creation. To use custom ones we must disable it and call the ImGui callbacks in the handler
         glfwInit();
         window app(1280, 720, "Voxels!!");
 
@@ -43,6 +46,7 @@ int main()
         settings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT, 1);
 
         renderer renderer(app, settings);
+        renderer.initImGui(app);
 
         glm::vec3 cameraPos = { -23, -22, -2 };
         glm::vec3 cameraDir = glm::rotate(glm::vec3(1.f, 0.f, 0.f), glm::radians(45.f), glm::vec3(0.f, -1.f, 0.f));
@@ -97,6 +101,7 @@ int main()
                 frameClock.restart();
 
                 app.processEvents();
+                renderer.updateImGui();
 
                 if (++index >= frameTimes.size())
                     {
@@ -114,6 +119,8 @@ int main()
                         glfwSetWindowTitle(app.getUnderlyingWindow(), formatted.c_str());
                         index = 0;
                     }
+
+                ImGui::ShowDemoWindow();
 
                 bool keyPressed = false;
                 while (accumulator >= updateRate)
@@ -196,6 +203,8 @@ int main()
             }
 
         renderer.waitForDeviceIdle();
+
+        renderer.deinitImGui();
 
         taskGraph.stop();
 

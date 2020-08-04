@@ -24,6 +24,7 @@
 #include "graphics/vulkan/vulkanSwapChain.hpp"
 
 #include "graphics/descriptorSet.hpp"
+#include "graphics/descriptorHandler.hpp"
 
 class window;
 class descriptorSettings;
@@ -56,6 +57,9 @@ class renderer
             std::vector<VkFence> m_imagesInFlight;
             unsigned int m_frame = 0;
 
+            descriptorHandler m_imGuiDescriptors;
+            bool m_imGuiEnabled = false;
+
             struct renderable
                 {
                     descriptorSet *m_descriptorSet = nullptr;
@@ -69,6 +73,10 @@ class renderer
         public:
             renderer(window &app, descriptorSettings &settings);
             ~renderer();
+
+            void initImGui(window &app);
+            void deinitImGui();
+            void updateImGui();
 
             void cleanup();
 

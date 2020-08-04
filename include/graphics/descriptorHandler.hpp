@@ -30,4 +30,6 @@ class descriptorHandler
             descriptorSet *createDescriptorSet();
             vulkanDescriptorSetLayout &getDescriptorSetLayout();
 
+            const vulkanDescriptorPool &getDescriptorPool() const;
+            vulkanDescriptorPool &getDescriptorPool();
     };

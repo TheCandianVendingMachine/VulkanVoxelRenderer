@@ -5,6 +5,9 @@
 #include "graphics/vertexBuffer.hpp"
 #include "graphics/vulkan/vulkanQueueFamilyIndices.hpp"
 #include "graphics/vulkan/vulkanHelpers.hpp"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_vulkan.h"
 #include <memory>
 
 void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
@@ -36,9 +39,7 @@ void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
         renderPassInfo.pClearValues = clearValues.data();
 
         vkCmdBeginRenderPass(submissionBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-
         vkCmdExecuteCommands(submissionBuffer, 1, &m_commandBuffers[m_frame].getUnderlyingCommandBuffer());
-
         vkCmdEndRenderPass(submissionBuffer);
 
         if (vkEndCommandBuffer(submissionBuffer) != VK_SUCCESS)
@@ -52,7 +53,7 @@ renderer::renderer(window &app, descriptorSettings &settings)
     {
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "Roll-a-Ball";
+        appInfo.pApplicationName = "Voxels!";
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName = "No Engine";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -155,6 +156,78 @@ renderer::renderer(window &app, descriptorSettings &settings)
 renderer::~renderer()
     {
         cleanup();
+    }
+
+void renderer::initImGui(window &app)
+    {
+        vulkanQueueFamilyIndices queueFamilies = helpers::findQueueFamilies(m_physicalDevice, m_windowSurface);
+
+        descriptorSettings imGuiDescriptorSettings;
+        imGuiDescriptorSettings.addSetting(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, 1);
+
+        m_imGuiDescriptors.create(m_device, m_swapChain.getImageViews().size(), imGuiDescriptorSettings);
+
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        ImGui::StyleColorsDark();
+
+        ImGui_ImplGlfw_InitForVulkan(app.getUnderlyingWindow(), true);
+        ImGui_ImplVulkan_InitInfo initInfo = {};
+        initInfo.Instance = m_instance;
+        initInfo.PhysicalDevice = m_physicalDevice;
+        initInfo.Device = m_device;
+        initInfo.QueueFamily = queueFamilies.m_graphicsFamily.value();
+        initInfo.Queue = m_graphicsQueue;
+        initInfo.PipelineCache = VK_NULL_HANDLE;
+        initInfo.DescriptorPool = m_imGuiDescriptors.getDescriptorPool();
+        initInfo.MinImageCount = c_maxFramesInFlight;
+        initInfo.ImageCount = c_maxFramesInFlight;
+        initInfo.MSAASamples = m_physicalDevice.getSampleCount();
+        initInfo.Allocator = nullptr;
+        initInfo.CheckVkResultFn = nullptr;
+        ImGui_ImplVulkan_Init(&initInfo, m_renderPass.getRenderPass());
+
+        // create fonts
+        {
+            vulkanCommandBuffer commandBuffer(m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+            VkCommandBufferBeginInfo info{};
+            info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            vkBeginCommandBuffer(commandBuffer, &info);
+
+            ImGui_ImplVulkan_CreateFontsTexture(commandBuffer);
+
+            vkEndCommandBuffer(commandBuffer);
+
+            VkSubmitInfo submitInfo{};
+            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers = &commandBuffer.getUnderlyingCommandBuffer();
+
+            vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_graphicsQueue);
+
+            ImGui_ImplVulkan_DestroyFontUploadObjects();
+        }
+
+        m_imGuiEnabled = true;
+    }
+
+void renderer::deinitImGui()
+    {
+        ImGui_ImplVulkan_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+        m_imGuiDescriptors.cleanup();
+        m_imGuiEnabled = false;
+    }
+
+void renderer::updateImGui()
+    {
+        ImGui_ImplVulkan_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
     }
 
 void renderer::cleanup()
@@ -284,6 +357,12 @@ void renderer::recordCommandBuffer()
 
                 vkCmdBindDescriptorSets(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_surface.m_pipelineLayout, 0, 1, &descriptorSet->getUnderlyingDescriptorSet(), 0, nullptr);
                 vkCmdDrawIndexed(currentCommandBuffer, renderable.m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
+            }
+
+        if (m_imGuiEnabled)
+            {
+                ImGui::Render();
+                ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), currentCommandBuffer);
             }
 
         if (vkEndCommandBuffer(currentCommandBuffer) != VK_SUCCESS)
