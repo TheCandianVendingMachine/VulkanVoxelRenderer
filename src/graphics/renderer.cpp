@@ -6,7 +6,6 @@
 #include "graphics/vulkan/vulkanQueueFamilyIndices.hpp"
 #include "graphics/vulkan/vulkanHelpers.hpp"
 #include <memory>
-#include <set>
 
 void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
     {
@@ -187,9 +186,58 @@ void renderer::cleanup()
         m_instance.cleanup();
     }
 
-void renderer::draw(descriptorSet &descriptorSet, vertexBuffer &vbo, indexBuffer *ibo)
+void renderer::draw(descriptorSet &descriptorSet, vertexBuffer &vbo, indexBuffer &ibo)
     {
-        m_renderables.push_back({ &descriptorSet, &vbo, ibo });
+        m_renderables.push_back({ &descriptorSet, &vbo, &ibo });
+    }
+
+void renderer::preRecording()
+    {
+        std::unique_ptr<vulkanCommandBuffer> updateCommandBuffer;
+
+        for (auto &renderable : m_renderables)
+            {
+                if (renderable.m_vertexBuffer->needsUpdate() || (renderable.m_indexBuffer && renderable.m_indexBuffer->needsUpdate()))
+                    {
+                        if (!updateCommandBuffer)
+                            {
+                                updateCommandBuffer = std::make_unique<vulkanCommandBuffer>(m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+                                VkCommandBufferBeginInfo info{};
+                                info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                                info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+                                vkBeginCommandBuffer(updateCommandBuffer->getUnderlyingCommandBuffer(), &info);
+                            }
+
+                        if (renderable.m_vertexBuffer->needsUpdate())
+                            {
+                                renderable.m_vertexBuffer->updateBuffer(*updateCommandBuffer);
+                            }
+
+                        if (renderable.m_indexBuffer->needsUpdate())
+                            {
+                                renderable.m_indexBuffer->updateBuffer(*updateCommandBuffer);
+                            }
+                    }
+
+                if (renderable.m_descriptorSet->needsUpdate())
+                    {
+                        renderable.m_descriptorSet->update();
+                    }
+            }
+
+        if (updateCommandBuffer)
+            {
+                vkEndCommandBuffer(updateCommandBuffer->getUnderlyingCommandBuffer());
+
+                VkSubmitInfo submitInfo{};
+                submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                submitInfo.commandBufferCount = 1;
+                submitInfo.pCommandBuffers = &updateCommandBuffer->getUnderlyingCommandBuffer();
+
+                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+                vkQueueWaitIdle(m_graphicsQueue);
+            }
     }
 
 void renderer::recordCommandBuffer()
@@ -222,62 +270,16 @@ void renderer::recordCommandBuffer()
 
         vkCmdBindPipeline(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_surface.m_graphicsPipeline);
 
-        if (!m_renderables.empty())
+        for (auto &renderable : m_renderables)
             {
-                for (auto &renderable : m_renderables)
-                    {
-                        if (renderable.m_vertexBuffer->needsUpdate() || (renderable.m_indexBuffer && renderable.m_indexBuffer->needsUpdate()))
-                            {
-                                vulkanCommandBuffer updateCommandBuffer(m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-                                VkCommandBufferBeginInfo info{};
-                                info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-                                info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-                                vkBeginCommandBuffer(updateCommandBuffer.getUnderlyingCommandBuffer(), &info);
+                VkDeviceSize offsets[] = { 0 };
+                vulkanDescriptorSet *descriptorSet = renderable.m_descriptorSet->getDescriptorSet(m_frame);
 
-                                if (renderable.m_vertexBuffer->needsUpdate())
-                                    {
-                                        renderable.m_vertexBuffer->updateBuffer(updateCommandBuffer);
-                                    }
+                vkCmdBindVertexBuffers(currentCommandBuffer, 0, 1, &renderable.m_vertexBuffer->getVertexBuffer().getUnderlyingBuffer(), offsets);
+                vkCmdBindIndexBuffer(currentCommandBuffer, renderable.m_indexBuffer->getIndexBuffer().getUnderlyingBuffer(), 0, VK_INDEX_TYPE_UINT32);
 
-                                if (renderable.m_indexBuffer && renderable.m_indexBuffer->needsUpdate())
-                                    {
-                                        renderable.m_indexBuffer->updateBuffer(updateCommandBuffer);
-                                    }
-
-                                vkEndCommandBuffer(updateCommandBuffer.getUnderlyingCommandBuffer());
-
-                                VkSubmitInfo submitInfo{};
-                                submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-                                submitInfo.commandBufferCount = 1;
-                                submitInfo.pCommandBuffers = &updateCommandBuffer.getUnderlyingCommandBuffer();
-
-                                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-                                vkQueueWaitIdle(m_graphicsQueue);
-                            }
-
-                        if (renderable.m_descriptorSet->needsUpdate())
-                            {
-                                renderable.m_descriptorSet->update();
-                            }
-
-                        VkDeviceSize offsets[] = { 0 };
-                        vulkanDescriptorSet *descriptorSet = renderable.m_descriptorSet->getDescriptorSet(m_frame);
-
-                        if (renderable.m_indexBuffer)
-                            {
-                                vkCmdBindVertexBuffers(currentCommandBuffer, 0, 1, &renderable.m_vertexBuffer->getVertexBuffer().getUnderlyingBuffer(), offsets);
-                                vkCmdBindIndexBuffer(currentCommandBuffer, renderable.m_indexBuffer->getIndexBuffer().getUnderlyingBuffer(), 0, VK_INDEX_TYPE_UINT32);
-
-                                vkCmdBindDescriptorSets(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_surface.m_pipelineLayout, 0, 1, &descriptorSet->getUnderlyingDescriptorSet(), 0, nullptr);
-                                vkCmdDrawIndexed(currentCommandBuffer, renderable.m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
-                            }
-                        else
-                            {
-                                vkCmdBindVertexBuffers(currentCommandBuffer, 0, 1, &renderable.m_vertexBuffer->getVertexBuffer().getUnderlyingBuffer(), offsets);
-                                vkCmdBindDescriptorSets(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_surface.m_pipelineLayout, 0, 1, &descriptorSet->getUnderlyingDescriptorSet(), 0, nullptr);
-                                vkCmdDraw(currentCommandBuffer, renderable.m_vertexBuffer->getVertexCount(), 1, 0, 0);
-                            }
-                    }
+                vkCmdBindDescriptorSets(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_surface.m_pipelineLayout, 0, 1, &descriptorSet->getUnderlyingDescriptorSet(), 0, nullptr);
+                vkCmdDrawIndexed(currentCommandBuffer, renderable.m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
             }
 
         if (vkEndCommandBuffer(currentCommandBuffer) != VK_SUCCESS)

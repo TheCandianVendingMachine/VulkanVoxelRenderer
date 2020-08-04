@@ -66,7 +66,9 @@ class renderer
 
             void cleanup();
 
-            void draw(descriptorSet &descriptorSet, vertexBuffer &vbo, indexBuffer *ibo);
+            void draw(descriptorSet &descriptorSet, vertexBuffer &vbo, indexBuffer &ibo);
+
+            void preRecording();
             void recordCommandBuffer();
 
             void display();
