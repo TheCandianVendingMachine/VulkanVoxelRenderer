@@ -1,25 +1,17 @@
 #include "graphics/renderSurface.hpp"
-#include "graphics/vulkan/vulkanPhysicalDevice.hpp"
-#include "graphics/vulkan/vulkanHelpers.hpp"
-#include "graphics/vulkan/vulkanAttachmentList.hpp"
-#include "graphics/vulkan/vulkanSubpass.hpp"
 #include "graphics/vulkan/vulkanDevice.hpp"
-#include <vector>
+#include "graphics/vulkan/vulkanSwapChain.hpp"
+#include "graphics/vulkan/vulkanRenderPass.hpp"
 
 void renderSurface::create(
     vulkanDevice &device,
-    vulkanPhysicalDevice &physicalDevice,
-    VkSurfaceKHR surface, 
-    const GLFWwindow &window,
+    vulkanSwapChain &swapChain,
+    vulkanRenderPass &renderPass,
     descriptorSettings &settings,
-    std::function<void(std::vector<vulkanSubpass>&, vulkanAttachmentList&)> renderPassInit, 
     std::function<void(std::vector<VkPipelineShaderStageCreateInfo>&, VkPipelineVertexInputStateCreateInfo&, VkPipelineInputAssemblyStateCreateInfo&, VkPipelineTessellationStateCreateInfo&, VkPipelineMultisampleStateCreateInfo&, VkPipelineDepthStencilStateCreateInfo&, VkPipelineDynamicStateCreateInfo&)> graphicsPipelineInit
 )
     {
-        m_swapChain.create(device, physicalDevice, surface, window);
-        m_renderPass.create(device, physicalDevice, m_swapChain, renderPassInit);
-
-        m_descriptorHandler.create(device, static_cast<unsigned int>(m_swapChain.getImageViews().size()), settings);
+        m_descriptorHandler.create(device, static_cast<unsigned int>(swapChain.getImageViews().size()), settings);
 
         m_pipelineLayout.create(device, { m_descriptorHandler.getDescriptorSetLayout() });
 
@@ -36,14 +28,14 @@ void renderSurface::create(
         VkViewport viewport{};
         viewport.x = 0.f;
         viewport.y = 0.f;
-        viewport.width = static_cast<float>(m_swapChain.getExtent().width);
-        viewport.height = static_cast<float>(m_swapChain.getExtent().height);
+        viewport.width = static_cast<float>(swapChain.getExtent().width);
+        viewport.height = static_cast<float>(swapChain.getExtent().height);
         viewport.minDepth = 0.f;
         viewport.maxDepth = 1.f;
 
         VkRect2D scissor{};
         scissor.offset = { 0, 0 };
-        scissor.extent = m_swapChain.getExtent();
+        scissor.extent = swapChain.getExtent();
 
         VkPipelineViewportStateCreateInfo viewportState{};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -99,7 +91,7 @@ void renderSurface::create(
             colourBlending, 
             dynamicState, 
             m_pipelineLayout, 
-            m_renderPass.getRenderPass(), 
+            renderPass,
             0, VK_NULL_HANDLE, 0
         );
     }
@@ -109,6 +101,4 @@ void renderSurface::cleanup()
         m_graphicsPipeline.cleanup();
         m_pipelineLayout.cleanup();
         m_descriptorHandler.cleanup();
-        m_renderPass.cleanup();
-        m_swapChain.cleanup();
     }

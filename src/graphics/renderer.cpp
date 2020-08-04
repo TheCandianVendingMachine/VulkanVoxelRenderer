@@ -23,10 +23,10 @@ void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
 
         VkRenderPassBeginInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassInfo.renderPass = m_surface.m_renderPass.getRenderPass();
-        renderPassInfo.framebuffer = m_surface.m_renderPass.getFrameBuffers().at(m_frame);
+        renderPassInfo.renderPass = m_renderPass.getRenderPass();
+        renderPassInfo.framebuffer = m_renderPass.getFrameBuffers().at(m_frame);
         renderPassInfo.renderArea.offset = { 0, 0 };
-        renderPassInfo.renderArea.extent = m_surface.m_swapChain.getExtent();
+        renderPassInfo.renderArea.extent = m_swapChain.getExtent();
 
         std::array<VkClearValue, 2> clearValues{};
         clearValues[0].color = { 1.f, 1.f, 1.f, 1.f };
@@ -73,14 +73,16 @@ renderer::renderer(window &app, descriptorSettings &settings)
         m_allocator.create(m_instance, m_device, m_physicalDevice);
         globals::g_vulkanAllocator = &m_allocator;
 
+        m_swapChain.create(m_device, m_physicalDevice, m_windowSurface, *app.getUnderlyingWindow());
+        m_renderPass.create(m_device, m_physicalDevice, m_swapChain, [] (std::vector<vulkanSubpass> &subpasses, vulkanAttachmentList &attachmentList) {});
+
         shader frag;
         shader vert;
 
         frag.load(m_device, "shaders/frag.spv");
         vert.load(m_device, "shaders/vert.spv");
 
-        m_surface.create(m_device, m_physicalDevice, m_windowSurface, *app.getUnderlyingWindow(), settings, 
-            [](std::vector<vulkanSubpass> &subpasses, vulkanAttachmentList &attachmentList){},
+        m_surface.create(m_device, m_swapChain, m_renderPass.getRenderPass(), settings, 
             [this, &frag, &vert](std::vector<VkPipelineShaderStageCreateInfo> &shaderStages, VkPipelineVertexInputStateCreateInfo &vertexInputInfo, VkPipelineInputAssemblyStateCreateInfo &inputAssembly, VkPipelineTessellationStateCreateInfo&, VkPipelineMultisampleStateCreateInfo &multisampling, VkPipelineDepthStencilStateCreateInfo &depthStencil, VkPipelineDynamicStateCreateInfo&){
                 VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
                 vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -128,10 +130,10 @@ renderer::renderer(window &app, descriptorSettings &settings)
         vulkanQueueFamilyIndices queueFamilies = helpers::findQueueFamilies(m_physicalDevice, m_windowSurface);
         m_commandPool.create(m_device, queueFamilies);
 
-        m_commandBuffers.resize(m_surface.m_swapChain.getImageViews().size());
+        m_commandBuffers.resize(m_swapChain.getImageViews().size());
         vulkanCommandBufferFunctions::createBatch(m_commandBuffers, m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
 
-        m_submissionCommandBuffers.resize(m_surface.m_swapChain.getImageViews().size());
+        m_submissionCommandBuffers.resize(m_swapChain.getImageViews().size());
         vulkanCommandBufferFunctions::createBatch(m_submissionCommandBuffers, m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
         vkGetDeviceQueue(m_device, queueFamilies.m_graphicsFamily.value(), 0, &m_graphicsQueue);
@@ -140,7 +142,7 @@ renderer::renderer(window &app, descriptorSettings &settings)
         m_imageAvailableSemaphores.resize(c_maxFramesInFlight);
         m_renderFinishedSemaphores.resize(c_maxFramesInFlight);
         m_inFlightFences.resize(c_maxFramesInFlight);
-        m_imagesInFlight.resize(m_surface.m_swapChain.getImageViews().size());
+        m_imagesInFlight.resize(m_swapChain.getImageViews().size());
 
         for (int i = 0; i < c_maxFramesInFlight; i++)
             {
@@ -175,6 +177,8 @@ void renderer::cleanup()
 
         m_commandPool.cleanup();
         m_surface.cleanup();
+        m_renderPass.cleanup();
+        m_swapChain.cleanup();
         m_allocator.cleanup();
         m_device.cleanup();
         m_physicalDevice.cleanup();
@@ -245,7 +249,7 @@ void renderer::recordCommandBuffer()
         VkCommandBufferInheritanceInfo inheritanceInfo{};
         inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
         inheritanceInfo.pNext = nullptr;
-        inheritanceInfo.renderPass = m_surface.m_renderPass.getRenderPass();
+        inheritanceInfo.renderPass = m_renderPass.getRenderPass();
         inheritanceInfo.subpass = VK_NULL_HANDLE;
         inheritanceInfo.framebuffer = VK_NULL_HANDLE;
         inheritanceInfo.occlusionQueryEnable = VK_FALSE;
@@ -296,7 +300,7 @@ void renderer::display()
         m_inFlightFences[m_frame].wait();
 
         uint32_t imageIndex;
-        VkResult result = vkAcquireNextImageKHR(m_device, m_surface.m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_frame], VK_NULL_HANDLE, &imageIndex);
+        VkResult result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_frame], VK_NULL_HANDLE, &imageIndex);
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
             {
                 // framebuffer resized
@@ -354,7 +358,7 @@ void renderer::display()
         presentInfo.pWaitSemaphores = signalSemaphores;
 
         VkSwapchainKHR swapChains[] = {
-            m_surface.m_swapChain
+            m_swapChain
         };
         presentInfo.swapchainCount = 1;
         presentInfo.pSwapchains = swapChains;
@@ -401,6 +405,6 @@ descriptorSet *renderer::createDescriptorSet()
 
 glm::vec2 renderer::getSize() const
     {
-        return { m_surface.m_swapChain.getExtent().width, m_surface.m_swapChain.getExtent().height };
+        return { m_swapChain.getExtent().width, m_swapChain.getExtent().height };
     }
 

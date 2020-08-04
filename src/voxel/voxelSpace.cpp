@@ -384,9 +384,6 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
                         voxelType type = test.at(gridPosition.x, gridPosition.y, gridPosition.z);
                         if (type != voxelType::NONE)
                             {
-                                test.at(gridPosition.x, gridPosition.y, gridPosition.z) = voxelType::TEST_1;
-                                buildGeometryAtPosition(test, gridPosition.x, gridPosition.y, gridPosition.z);
-
                                 return gridPosition;
                             }
                     }

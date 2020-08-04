@@ -8,6 +8,7 @@
 #include "graphics/vulkan/vulkanInstance.hpp"
 #include "graphics/vulkan/vulkanDevice.hpp"
 #include "graphics/vulkan/vulkanPhysicalDevice.hpp"
+
 #include "graphics/renderSurface.hpp"
 
 #include "graphics/vertexBuffer.hpp"
@@ -18,6 +19,9 @@
 #include "graphics/vulkan/vulkanFence.hpp"
 #include "graphics/vulkan/vulkanSemaphore.hpp"
 #include "graphics/vulkan/vulkanDescriptorSet.hpp"
+
+#include "graphics/renderPass.hpp"
+#include "graphics/vulkan/vulkanSwapChain.hpp"
 
 #include "graphics/descriptorSet.hpp"
 
@@ -36,6 +40,8 @@ class renderer
             VkSurfaceKHR m_windowSurface = VK_NULL_HANDLE;
 
             renderSurface m_surface;
+            vulkanSwapChain m_swapChain;
+            renderPass m_renderPass;
 
             VkQueue m_graphicsQueue = VK_NULL_HANDLE;
             VkQueue m_presentQueue = VK_NULL_HANDLE;
