@@ -315,6 +315,12 @@ void renderer::preRecording()
                 vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
                 vkQueueWaitIdle(m_graphicsQueue);
             }
+
+        if (m_imGuiEnabled)
+            {
+                ImGui::Render();
+                m_imGuiDrawData = ImGui::GetDrawData();
+            }
     }
 
 void renderer::recordCommandBuffer()
@@ -361,8 +367,7 @@ void renderer::recordCommandBuffer()
 
         if (m_imGuiEnabled)
             {
-                ImGui::Render();
-                ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), currentCommandBuffer);
+                ImGui_ImplVulkan_RenderDrawData(m_imGuiDrawData, currentCommandBuffer);
             }
 
         if (vkEndCommandBuffer(currentCommandBuffer) != VK_SUCCESS)

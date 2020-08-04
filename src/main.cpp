@@ -187,7 +187,7 @@ int main()
                                 keyPressed = true;
                             }
                     }
-
+                
                 if (keyPressed)
                     {
                         camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0, -1.f, 0));

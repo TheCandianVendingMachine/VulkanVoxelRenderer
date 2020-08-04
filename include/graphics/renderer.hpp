@@ -26,6 +26,7 @@
 #include "graphics/descriptorSet.hpp"
 #include "graphics/descriptorHandler.hpp"
 
+struct ImDrawData;
 class window;
 class descriptorSettings;
 class renderer
@@ -58,6 +59,7 @@ class renderer
             unsigned int m_frame = 0;
 
             descriptorHandler m_imGuiDescriptors;
+            ImDrawData *m_imGuiDrawData = nullptr;
             bool m_imGuiEnabled = false;
 
             struct renderable
