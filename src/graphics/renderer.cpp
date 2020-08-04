@@ -165,7 +165,7 @@ void renderer::initImGui(window &app)
         descriptorSettings imGuiDescriptorSettings;
         imGuiDescriptorSettings.addSetting(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 0, 1);
 
-        m_imGuiDescriptors.create(m_device, m_swapChain.getImageViews().size(), imGuiDescriptorSettings);
+        m_imGuiDescriptors.create(m_device, static_cast<unsigned int>(m_swapChain.getImageViews().size()), imGuiDescriptorSettings);
 
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();

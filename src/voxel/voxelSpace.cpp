@@ -198,7 +198,7 @@ std::vector<float> noiseMapGenerator(int sizeX, int sizeY, int sizeZ, int seed, 
                                         float sampleY = (y - halfHeight) / scale * frequency + octaveOffsets[i].y;
                                         float sampleZ = (z - halfDepth) / scale * frequency + octaveOffsets[i].z;
 
-                                        float perlinValue = noiseGenerator.noise3D(sampleX, sampleY, sampleZ);
+                                        float perlinValue = static_cast<float>(noiseGenerator.noise3D(sampleX, sampleY, sampleZ));
                                         noiseHeight += perlinValue * amplitude;
 
                                         amplitude += persistance;
@@ -349,7 +349,7 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
             }
 
         int stepCount = 0;
-        const int maxStepCount = test.getSizeX() + test.getSizeY() + test.getSizeZ();
+        const int maxStepCount = static_cast<int>(test.getSizeX() + test.getSizeY() + test.getSizeZ());
         while (stepCount++ <= maxStepCount)
             {
                 if (sideDistance.x < sideDistance.z)

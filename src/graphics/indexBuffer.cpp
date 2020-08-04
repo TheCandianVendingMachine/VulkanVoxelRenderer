@@ -65,7 +65,7 @@ void indexBuffer::updateBuffer(vulkanCommandBuffer &commandBuffer)
             {
                 m_indexBuffer.cleanup();
                 m_stagingIndexBuffer.cleanup();
-                create(m_indices.size(), m_dynamic);
+                create(static_cast<unsigned int>(m_indices.size()), m_dynamic);
             }
 
         void *data = nullptr;

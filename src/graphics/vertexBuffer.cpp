@@ -65,7 +65,7 @@ void vertexBuffer::updateBuffer(vulkanCommandBuffer &commandBuffer)
             {
                 m_vertexBuffer.cleanup();
                 m_stagingVertexBuffer.cleanup();
-                create(m_vertices.size(), m_dynamic);
+                create(static_cast<unsigned int>(m_vertices.size()), m_dynamic);
             }
 
         void *data = nullptr;

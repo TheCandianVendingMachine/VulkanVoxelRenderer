@@ -153,13 +153,13 @@ int main()
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_Q))
                             {
-                                cameraPos.y += -speed * updateRate;
+                                cameraPos.y += -static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_Z))
                             {
-                                cameraPos.y += speed * updateRate;
+                                cameraPos.y += static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 

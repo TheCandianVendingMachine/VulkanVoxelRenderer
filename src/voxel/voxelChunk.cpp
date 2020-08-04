@@ -112,7 +112,7 @@ void voxelChunk::mesh(std::vector<quad> &quads)
             }
     }
 
-void voxelChunk::meshAtPosition(std::vector<quad> &quads, int x, int y, int z)
+void voxelChunk::meshAtPosition(std::vector<quad> &quads, voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z)
     {
         if (!withinBounds(x, y, z) || at(x, y, z) == voxelType::NONE) { return; }
         float posX = x * m_voxelSize;
@@ -182,7 +182,7 @@ void voxelChunk::meshAtPosition(std::vector<quad> &quads, int x, int y, int z)
             }
     }
 
-bool voxelChunk::withinBounds(int x, int y, int z) const
+bool voxelChunk::withinBounds(voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z) const
     {
         return (x >= 0 && x < m_sizeX) && (y >= 0 && y < m_sizeY) && (z >= 0 && z < m_sizeZ);
     }

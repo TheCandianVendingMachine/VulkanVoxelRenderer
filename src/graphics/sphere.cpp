@@ -146,7 +146,7 @@ void sphere::create(int resolution)
         std::vector<fe::index> mirroredIndices(m_indices);
         for (auto &index : mirroredIndices)
             {
-                if (totalVertexCount - index > totalVerticesForLastRow)
+                if (static_cast<int>(totalVertexCount - index) > totalVerticesForLastRow)
                     {
                         index += totalVertexCount;
                     }

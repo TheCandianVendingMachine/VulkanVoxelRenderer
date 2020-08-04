@@ -44,8 +44,8 @@ class voxelChunk
             float getVoxelSize() const;
 
             void mesh(std::vector<quad> &quads);
-            void meshAtPosition(std::vector<quad> &quads, int x, int y, int z);
+            void meshAtPosition(std::vector<quad> &quads, voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z);
 
-            bool withinBounds(int x, int y, int z) const;
+            bool withinBounds(voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z) const;
 
     };
