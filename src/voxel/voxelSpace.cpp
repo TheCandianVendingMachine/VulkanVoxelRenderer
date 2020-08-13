@@ -5,138 +5,85 @@
 #include "typeDefines.hpp"
 #include "PerlinNoise.hpp"
 #include "random.hpp"
+#include "graphics/vulkan/vulkanAllocator.hpp"
+#include "graphics/vulkan/vulkanCommandBuffer.hpp"
+#include <vk_mem_alloc.h>
 #include <vector>
 #include <array>
 #include <glm/gtx/quaternion.hpp>
 
-void voxelSpace::buildGeometryAtPosition(voxelChunk &chunk, unsigned int x, unsigned int y, unsigned int z)
+void voxelSpace::updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset)
     {
-        std::vector<quad> quads;
-        test.meshAtPosition(quads, x, y, z);
-        test.meshAtPosition(quads, x - 1, y, z);
-        test.meshAtPosition(quads, x + 1, y, z);
-        test.meshAtPosition(quads, x, y - 1, z);
-        test.meshAtPosition(quads, x, y + 1, z);
-        test.meshAtPosition(quads, x, y, z - 1);
-        test.meshAtPosition(quads, x, y, z + 1);
-    }
+        unsigned int vertexOffset = 0;
+        unsigned int indexOffset = 0;
 
-void voxelSpace::buildGeometry(voxelChunk &chunk)
-    {
-        std::vector<quad> quads;
-        chunk.mesh(quads);
-
-        buildGeometry(quads);
-    }
-
-void voxelSpace::buildGeometry(const std::vector<quad> &quads)
-    {
-        vertex vertexArr[4] = {};
-        vertex &v0 = vertexArr[0];
-        vertex &v1 = vertexArr[1];
-        vertex &v2 = vertexArr[2];
-        vertex &v3 = vertexArr[3];
-
-        fe::index indexArrPositive[6] = {
-            0, 1, 2, 0, 2, 3
-        };
-        fe::index indexArrNegative[6] = {
-            2, 1, 0, 3, 2, 0
-        };
-
-        glm::vec3 colours[] = {
-            { 0.23f, 0.48f, 0.34f },
-            { 0.53f, 0.81f, 0.92f },
-            { 0.37f, 0.50f, 0.22f }
-        };
-
-        for (auto &quad : quads)
+        fe::uInt8 *cpuStagingBuffer = static_cast<fe::uInt8*>(m_localBuffer.m_cpuStagingBuffer);
+        for (auto &voxelData : chunk.m_voxelData)
             {
-                v0.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
-                v1.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
-                v2.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
-                v3.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
+                unsigned long long indexSize = voxelData.m_indices.size() * sizeof(fe::index);
+                unsigned long long vertexSize = voxelData.m_vertices.size() * sizeof(vertex);
 
-                switch (std::abs(quad.m_orientation))
-                    {
-                        case 1:
-                            v0.m_position.x = quad.m_position.x;
-                            v0.m_position.y = quad.m_position.y;
-                            v0.m_position.z = quad.m_position.z;
+                std::memcpy(cpuStagingBuffer + indexOffset, voxelData.m_indices.data(), indexSize);
+                std::memcpy(cpuStagingBuffer + vertexBufferOffset + vertexOffset, voxelData.m_vertices.data(), vertexSize);
 
-                            v1.m_position.x = quad.m_position.x + quad.m_size.x;
-                            v1.m_position.y = quad.m_position.y;
-                            v1.m_position.z = quad.m_position.z;
+                indexOffset += indexSize;
+                vertexOffset += vertexSize;
+            }
+    }
 
-                            v2.m_position.x = quad.m_position.x + quad.m_size.x;
-                            v2.m_position.y = quad.m_position.y + quad.m_size.y;
-                            v2.m_position.z = quad.m_position.z;
+void voxelSpace::updateMemory()
+    {
+        unsigned int totalVertexCount = m_testChunk.m_vertexCount;
+        unsigned int totalIndexCount = m_testChunk.m_indexCount;
 
-                            v3.m_position.x = quad.m_position.x;
-                            v3.m_position.y = quad.m_position.y + quad.m_size.y;
-                            v3.m_position.z = quad.m_position.z;
-                            break;
-                        case 2:
-                            v0.m_position.x = quad.m_position.x;
-                            v0.m_position.y = quad.m_position.z;
-                            v0.m_position.z = quad.m_position.y;
+        if (m_localBuffer.m_maxVertexCount < totalVertexCount || m_localBuffer.m_maxIndexCount < totalIndexCount)
+            {
+                m_localBuffer.create(totalVertexCount, totalIndexCount);
+            }
 
-                            v1.m_position.x = quad.m_position.x + quad.m_size.x;
-                            v1.m_position.y = quad.m_position.z;
-                            v1.m_position.z = quad.m_position.y;
+        // for all chunks
+        updateChunkMemory(m_testChunk, static_cast<fe::int8*>(m_localBuffer.m_cpuStagingBuffer) + 0, getVertexMemoryOffset());
+    }
 
-                            v2.m_position.x = quad.m_position.x + quad.m_size.x;
-                            v2.m_position.y = quad.m_position.z;
-                            v2.m_position.z = quad.m_position.y + quad.m_size.y;
+void voxelSpace::createChunk(chunkData &chunk, const voxelChunk::sizeType sizeX, const voxelChunk::sizeType sizeY, const voxelChunk::sizeType sizeZ)
+    {
+        chunk.m_chunk.create(sizeX, sizeY, sizeZ);
 
-                            v3.m_position.x = quad.m_position.x;
-                            v3.m_position.y = quad.m_position.z;
-                            v3.m_position.z = quad.m_position.y + quad.m_size.y;
-                            break;
-                        case 3:
-                            v0.m_position.x = quad.m_position.z;
-                            v0.m_position.y = quad.m_position.x;
-                            v0.m_position.z = quad.m_position.y;
+        // We are getting the best number to subdivide our chunk to the threshold we want
+        // We over-estimate the actual size so we dont leave out data. I would rather extra than too few
+        voxelChunk::sizeType subChunkCountX = (sizeX + (c_chunkSubSize - (sizeX % c_chunkSubSize))) / c_chunkSubSize;
+        voxelChunk::sizeType subChunkCountY = (sizeY + (c_chunkSubSize - (sizeY % c_chunkSubSize))) / c_chunkSubSize;
+        voxelChunk::sizeType subChunkCountZ = (sizeZ + (c_chunkSubSize - (sizeZ % c_chunkSubSize))) / c_chunkSubSize;
 
-                            v1.m_position.x = quad.m_position.z;
-                            v1.m_position.y = quad.m_position.x + quad.m_size.x;
-                            v1.m_position.z = quad.m_position.y;
+        chunk.m_voxelData.resize(static_cast<std::size_t>(subChunkCountX * subChunkCountY * subChunkCountZ));
+        chunk.m_subSize = c_chunkSubSize;
 
-                            v2.m_position.x = quad.m_position.z;
-                            v2.m_position.y = quad.m_position.x + quad.m_size.x;
-                            v2.m_position.z = quad.m_position.y + quad.m_size.y;
+        chunk.m_sizeX = sizeX;
+        chunk.m_sizeY = sizeY;
+        chunk.m_sizeZ = sizeZ;
+    }
 
-                            v3.m_position.x = quad.m_position.z;
-                            v3.m_position.y = quad.m_position.x;
-                            v3.m_position.z = quad.m_position.y + quad.m_size.y;
-                            break;
-                        default:
-                            break;
-                    }
+void voxelSpace::buildChunk(chunkData &chunk)
+    {
+        chunk.m_vertexCount = 0;
+        chunk.m_indexCount = 0;
 
-                m_vertexBuffer.addVertices(vertexArr, 4);
-                if (quad.m_orientation < 0)
-                    {
-                        m_indexBuffer.addIndices(indexArrNegative, 6);
-                    }
-                else 
-                    {
-                        m_indexBuffer.addIndices(indexArrPositive, 6);
-                    }
-                
-                indexArrPositive[0] += 4;
-                indexArrPositive[1] += 4;
-                indexArrPositive[2] += 4;
-                indexArrPositive[3] += 4;
-                indexArrPositive[4] += 4;
-                indexArrPositive[5] += 4;
+        unsigned int totalIndexOffset = 0;
 
-                indexArrNegative[0] += 4;
-                indexArrNegative[1] += 4;
-                indexArrNegative[2] += 4;
-                indexArrNegative[3] += 4;
-                indexArrNegative[4] += 4;
-                indexArrNegative[5] += 4;
+        buildChunkMesh(chunk);
+        for (auto &subChunk : chunk.m_voxelData)
+            {
+                totalIndexOffset = buildGeometry(subChunk, totalIndexOffset);
+                chunk.m_vertexCount += subChunk.m_vertices.size();
+                chunk.m_indexCount += subChunk.m_indices.size();
+            }
+    }
+
+void voxelSpace::destroyChunk(chunkData &chunk)
+    {
+        for (auto &voxelData : chunk.m_voxelData)
+            {
+                voxelData.m_quads.clear();
             }
     }
 
@@ -151,8 +98,8 @@ void voxelSpace::create()
 
 void voxelSpace::destroy()
     {
-        m_vertexBuffer.destroy();
-        m_indexBuffer.destroy();
+        destroyChunk(m_testChunk);
+        m_localBuffer.destroy();
     }
 
 std::vector<float> noiseMapGenerator(int sizeX, int sizeY, int sizeZ, int seed, float scale, int octaves, float persistance, float lacunarity, glm::vec3 offset)
@@ -246,17 +193,17 @@ void voxelSpace::createWorld()
         }};
 
         const siv::PerlinNoise noiseSurface(fe::random::get().generate<uint32_t>());
-        test.create(48, 48, 48);
+        createChunk(m_testChunk, 48, 48, 48);
 
-        for (int x = 0; x < test.getSizeX(); x++)
+        for (int x = 0; x < m_testChunk.m_chunk.getSizeX(); x++)
             {
-                double nx = (static_cast<double>(x) / test.getSizeX());
-                for (int y = 0; y < test.getSizeY(); y++)
+                double nx = (static_cast<double>(x) / m_testChunk.m_chunk.getSizeX());
+                for (int y = 0; y < m_testChunk.m_chunk.getSizeY(); y++)
                     {
-                        double ny = (static_cast<double>(y) / test.getSizeY());
-                        for (int z = 0; z < test.getSizeZ(); z++)
+                        double ny = (static_cast<double>(y) / m_testChunk.m_chunk.getSizeY());
+                        for (int z = 0; z < m_testChunk.m_chunk.getSizeZ(); z++)
                             {
-                                double nz = (static_cast<double>(z) / test.getSizeZ());
+                                double nz = (static_cast<double>(z) / m_testChunk.m_chunk.getSizeZ());
                                 double surfaceNoise = 0.0;
                                 for (const auto &frequency : surfaceFrequencies)
                                     {
@@ -268,35 +215,16 @@ void voxelSpace::createWorld()
                                     {
                                         type = voxelType::DEFAULT;
                                     }
-                                test.at(x, y, z) = type;
+                                m_testChunk.m_chunk.at(x, y, z) = type;
                             }
                     }
             }
 
-        buildGeometry(test);
+        buildChunk(m_testChunk);
+        updateMemory();
 
         m_translation = glm::translate(glm::mat4(1.f), glm::vec3{0.f, 0.f, 0.f});
         m_quaternion = glm::angleAxis(0.f, glm::normalize(glm::vec3{ 0, 1.f, 0.f }));
-    }
-
-const vertexBuffer &voxelSpace::getVertexBuffer() const
-    {
-        return m_vertexBuffer;
-    }
-
-vertexBuffer &voxelSpace::getVertexBuffer()
-    {
-        return m_vertexBuffer;
-    }
-
-const indexBuffer &voxelSpace::getIndexBuffer() const
-    {
-        return m_indexBuffer;
-    }
-
-indexBuffer &voxelSpace::getIndexBuffer()
-    {
-        return m_indexBuffer;
     }
 
 glm::mat4 voxelSpace::getModelTransformation() const
@@ -309,7 +237,7 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
         constexpr float gridOffset = 0.000001f;
 
         glm::vec3 worldPosition = getModelTransformation() * glm::vec4(origin, 0.f);
-        glm::vec<3, int> gridPosition = worldPosition / test.getVoxelSize();
+        glm::vec<3, int> gridPosition = worldPosition / m_testChunk.m_chunk.getVoxelSize();
 
         glm::vec3 deltaDistance = glm::abs(1.f / direction);
         glm::vec3 sideDistance;
@@ -349,7 +277,7 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
             }
 
         int stepCount = 0;
-        const int maxStepCount = static_cast<int>(test.getSizeX() + test.getSizeY() + test.getSizeZ());
+        const int maxStepCount = static_cast<int>(m_testChunk.m_chunk.getSizeX() + m_testChunk.m_chunk.getSizeY() + m_testChunk.m_chunk.getSizeZ());
         while (stepCount++ <= maxStepCount)
             {
                 if (sideDistance.x < sideDistance.z)
@@ -379,9 +307,9 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
                             }
                     }
 
-                if (test.withinBounds(gridPosition.x, gridPosition.y, gridPosition.z))
+                if (m_testChunk.m_chunk.withinBounds(gridPosition.x, gridPosition.y, gridPosition.z))
                     {
-                        voxelType type = test.at(gridPosition.x, gridPosition.y, gridPosition.z);
+                        voxelType type = m_testChunk.m_chunk.at(gridPosition.x, gridPosition.y, gridPosition.z);
                         if (type != voxelType::NONE)
                             {
                                 return gridPosition;
@@ -390,4 +318,245 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
             }
 
         return {};
+    }
+
+void voxelSpace::updateBuffers(vulkanCommandBuffer &commandBuffer)
+    {
+        VkBufferCopy copyRegion{};
+        copyRegion.size = m_localBuffer.m_bufferSize;
+        vkCmdCopyBuffer(commandBuffer, m_localBuffer.m_masterStagingBuffer, m_localBuffer.m_masterBuffer, 1, &copyRegion);
+        m_localBuffer.m_needUpdate = false;
+    }
+
+bool voxelSpace::needsUpdate() const
+    {
+        return m_localBuffer.m_needUpdate;
+    }
+
+vulkanBuffer &voxelSpace::getBufferMemory()
+    {
+        return m_localBuffer.m_masterBuffer;
+    }
+
+VkDeviceSize voxelSpace::getVertexMemoryOffset() const
+    {
+        return m_localBuffer.m_maxIndexCount * sizeof(fe::index);
+    }
+
+VkDeviceSize voxelSpace::getIndexBufferSize() const
+    {
+        return getIndexCount() * sizeof(fe::index);
+    }
+
+VkDeviceSize voxelSpace::getVertexBufferSize() const
+    {
+        return getVertexCount() * sizeof(vertex);
+    }
+
+unsigned int voxelSpace::getVertexCount() const
+    {
+        unsigned int vertexCount = 0;
+        vertexCount += m_testChunk.m_vertexCount;
+
+        return vertexCount;
+    }
+
+unsigned int voxelSpace::getIndexCount() const
+    {
+        unsigned int indexCount = 0;
+        indexCount += m_testChunk.m_indexCount;
+
+        return indexCount;
+    }
+
+void buildChunkMesh(voxelSpace::chunkData &chunkData)
+    {
+        voxelChunk::sizeType x = 0;
+        voxelChunk::sizeType y = 0;
+        voxelChunk::sizeType z = 0;
+        for (auto &voxelData : chunkData.m_voxelData)
+            {
+                for (voxelChunk::sizeType yIncrement = 0; yIncrement < chunkData.m_subSize; yIncrement++)
+                    {
+                        for (voxelChunk::sizeType xIncrement = 0; xIncrement < chunkData.m_subSize; xIncrement++)
+                            {
+                                for (voxelChunk::sizeType zIncrement = 0; zIncrement < chunkData.m_subSize; zIncrement++)
+                                    {
+                                        chunkData.m_chunk.meshAtPosition(voxelData.m_quads, x + xIncrement, y + yIncrement, z + zIncrement);
+                                    }
+                            }
+                    }
+
+                x += chunkData.m_subSize;
+                if (x > chunkData.m_sizeX)
+                    {
+                        x = 0;
+                        y += chunkData.m_subSize;
+                        if (y > chunkData.m_sizeY)
+                            {
+                                y = 0;
+                                z += chunkData.m_subSize;
+                            }
+                    }               
+            }
+    }
+
+unsigned int buildGeometry(voxelSpace::chunkVoxelData &voxelData, unsigned int indexOffset)
+    {
+        vertex vertexArr[4] = {};
+        vertex &v0 = vertexArr[0];
+        vertex &v1 = vertexArr[1];
+        vertex &v2 = vertexArr[2];
+        vertex &v3 = vertexArr[3];
+
+        fe::index indexArrPositive[6] = {
+            0, 1, 2, 0, 2, 3
+        };
+        fe::index indexArrNegative[6] = {
+            2, 1, 0, 3, 2, 0
+        };
+
+        indexArrPositive[0] += indexOffset;
+        indexArrPositive[1] += indexOffset;
+        indexArrPositive[2] += indexOffset;
+        indexArrPositive[3] += indexOffset;
+        indexArrPositive[4] += indexOffset;
+        indexArrPositive[5] += indexOffset;
+
+        indexArrNegative[0] += indexOffset;
+        indexArrNegative[1] += indexOffset;
+        indexArrNegative[2] += indexOffset;
+        indexArrNegative[3] += indexOffset;
+        indexArrNegative[4] += indexOffset;
+        indexArrNegative[5] += indexOffset;
+
+        glm::vec3 colours[] = {
+            { 0.23f, 0.48f, 0.34f },
+            { 0.53f, 0.81f, 0.92f },
+            { 0.37f, 0.50f, 0.22f }
+        };
+
+        for (auto &quad : voxelData.m_quads)
+            {
+                v0.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
+                v1.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
+                v2.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
+                v3.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
+
+                switch (std::abs(quad.m_orientation))
+                    {
+                        case 1:
+                            v0.m_position.x = quad.m_position.x;
+                            v0.m_position.y = quad.m_position.y;
+                            v0.m_position.z = quad.m_position.z;
+
+                            v1.m_position.x = quad.m_position.x + quad.m_size.x;
+                            v1.m_position.y = quad.m_position.y;
+                            v1.m_position.z = quad.m_position.z;
+
+                            v2.m_position.x = quad.m_position.x + quad.m_size.x;
+                            v2.m_position.y = quad.m_position.y + quad.m_size.y;
+                            v2.m_position.z = quad.m_position.z;
+
+                            v3.m_position.x = quad.m_position.x;
+                            v3.m_position.y = quad.m_position.y + quad.m_size.y;
+                            v3.m_position.z = quad.m_position.z;
+                            break;
+                        case 2:
+                            v0.m_position.x = quad.m_position.x;
+                            v0.m_position.y = quad.m_position.z;
+                            v0.m_position.z = quad.m_position.y;
+
+                            v1.m_position.x = quad.m_position.x + quad.m_size.x;
+                            v1.m_position.y = quad.m_position.z;
+                            v1.m_position.z = quad.m_position.y;
+
+                            v2.m_position.x = quad.m_position.x + quad.m_size.x;
+                            v2.m_position.y = quad.m_position.z;
+                            v2.m_position.z = quad.m_position.y + quad.m_size.y;
+
+                            v3.m_position.x = quad.m_position.x;
+                            v3.m_position.y = quad.m_position.z;
+                            v3.m_position.z = quad.m_position.y + quad.m_size.y;
+                            break;
+                        case 3:
+                            v0.m_position.x = quad.m_position.z;
+                            v0.m_position.y = quad.m_position.x;
+                            v0.m_position.z = quad.m_position.y;
+
+                            v1.m_position.x = quad.m_position.z;
+                            v1.m_position.y = quad.m_position.x + quad.m_size.x;
+                            v1.m_position.z = quad.m_position.y;
+
+                            v2.m_position.x = quad.m_position.z;
+                            v2.m_position.y = quad.m_position.x + quad.m_size.x;
+                            v2.m_position.z = quad.m_position.y + quad.m_size.y;
+
+                            v3.m_position.x = quad.m_position.z;
+                            v3.m_position.y = quad.m_position.x;
+                            v3.m_position.z = quad.m_position.y + quad.m_size.y;
+                            break;
+                        default:
+                            break;
+                    }
+
+                voxelData.m_vertices.insert(voxelData.m_vertices.end(), vertexArr, vertexArr + 4);
+                if (quad.m_orientation < 0)
+                    {
+                        voxelData.m_indices.insert(voxelData.m_indices.end(), indexArrNegative, indexArrNegative + 6);
+                    }
+                else 
+                    {
+                        voxelData.m_indices.insert(voxelData.m_indices.end(), indexArrPositive, indexArrPositive + 6);
+                    }
+                
+                indexArrPositive[0] += 4;
+                indexArrPositive[1] += 4;
+                indexArrPositive[2] += 4;
+                indexArrPositive[3] += 4;
+                indexArrPositive[4] += 4;
+                indexArrPositive[5] += 4;
+
+                indexArrNegative[0] += 4;
+                indexArrNegative[1] += 4;
+                indexArrNegative[2] += 4;
+                indexArrNegative[3] += 4;
+                indexArrNegative[4] += 4;
+                indexArrNegative[5] += 4;
+            }
+
+        return indexOffset + voxelData.m_vertices.size();
+    }
+
+void voxelSpace::localBuffer::create(unsigned int vertexCount, unsigned int indexCount)
+    {
+        destroy();
+
+        m_bufferSize = vertexCount * sizeof(vertex) + indexCount * sizeof(fe::index);
+        m_masterStagingBuffer.create(m_bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VMA_MEMORY_USAGE_CPU_COPY);
+
+        VmaMemoryUsage bufferUsage = VMA_MEMORY_USAGE_GPU_ONLY;
+        m_masterBuffer.create(m_bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bufferUsage);
+
+        m_maxIndexCount = indexCount;
+        m_maxVertexCount = vertexCount;
+
+        vmaMapMemory(*globals::g_vulkanAllocator, m_masterStagingBuffer.getUnderlyingAllocation(), &m_cpuStagingBuffer);
+        m_needUpdate = true;
+        m_exists = true;
+    }
+
+void voxelSpace::localBuffer::destroy()
+    {
+        if (!m_exists) { return; }
+
+        m_bufferSize = 0;
+        m_maxIndexCount = 0;
+        m_maxVertexCount = 0;
+
+        vmaUnmapMemory(*globals::g_vulkanAllocator, m_masterStagingBuffer.getUnderlyingAllocation());
+
+        m_masterStagingBuffer.cleanup();
+        m_masterBuffer.cleanup();
+        m_exists = false;
     }

@@ -25,6 +25,7 @@ class vertexBuffer
             ~vertexBuffer();
             void create(unsigned int size, bool dynamic);
             void destroy();
+            void clear();
             
             void addVertex(vertex vertex);
             void addVertices(vertex *vertices, std::size_t count);

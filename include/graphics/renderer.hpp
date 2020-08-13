@@ -29,6 +29,7 @@
 struct ImDrawData;
 class window;
 class descriptorSettings;
+class voxelSpace;
 class renderer
     {
         private:
@@ -65,8 +66,7 @@ class renderer
             struct renderable
                 {
                     descriptorSet *m_descriptorSet = nullptr;
-                    vertexBuffer *m_vertexBuffer = nullptr;
-                    indexBuffer *m_indexBuffer = nullptr;
+                    voxelSpace &m_voxelSpace;
                 };
             std::vector<renderable> m_renderables;
 
@@ -82,7 +82,7 @@ class renderer
 
             void cleanup();
 
-            void draw(descriptorSet &descriptorSet, vertexBuffer &vbo, indexBuffer &ibo);
+            void draw(descriptorSet &descriptorSet, voxelSpace &voxelSpace);
 
             void preRecording();
             void recordCommandBuffer();

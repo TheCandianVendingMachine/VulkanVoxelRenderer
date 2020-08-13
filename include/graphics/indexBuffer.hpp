@@ -25,6 +25,7 @@ class indexBuffer
             ~indexBuffer();
             void create(unsigned int size, bool dynamic);
             void destroy();
+            void clear();
             
             void addIndex(fe::index index);
             void addIndices(fe::index *indices, std::size_t count);

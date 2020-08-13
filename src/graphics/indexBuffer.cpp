@@ -35,6 +35,12 @@ void indexBuffer::destroy()
         m_bufferSize = 0;
     }
 
+void indexBuffer::clear()
+    {
+        m_indices.clear();
+        m_updated = true;
+    }
+
 void indexBuffer::addIndex(fe::index index)
     {
         m_indices.push_back(index);

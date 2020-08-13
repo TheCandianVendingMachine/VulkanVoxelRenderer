@@ -8,6 +8,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_vulkan.h"
+#include "voxel/voxelSpace.hpp"
 #include <memory>
 
 void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
@@ -263,9 +264,9 @@ void renderer::cleanup()
         m_instance.cleanup();
     }
 
-void renderer::draw(descriptorSet &descriptorSet, vertexBuffer &vbo, indexBuffer &ibo)
+void renderer::draw(descriptorSet &descriptorSet, voxelSpace &voxelSpace)
     {
-        m_renderables.push_back({ &descriptorSet, &vbo, &ibo });
+        m_renderables.push_back({ &descriptorSet, voxelSpace });
     }
 
 void renderer::preRecording()
@@ -274,7 +275,7 @@ void renderer::preRecording()
 
         for (auto &renderable : m_renderables)
             {
-                if (renderable.m_vertexBuffer->needsUpdate() || (renderable.m_indexBuffer && renderable.m_indexBuffer->needsUpdate()))
+                if (renderable.m_voxelSpace.needsUpdate())
                     {
                         if (!updateCommandBuffer)
                             {
@@ -286,15 +287,7 @@ void renderer::preRecording()
                                 vkBeginCommandBuffer(updateCommandBuffer->getUnderlyingCommandBuffer(), &info);
                             }
 
-                        if (renderable.m_vertexBuffer->needsUpdate())
-                            {
-                                renderable.m_vertexBuffer->updateBuffer(*updateCommandBuffer);
-                            }
-
-                        if (renderable.m_indexBuffer->needsUpdate())
-                            {
-                                renderable.m_indexBuffer->updateBuffer(*updateCommandBuffer);
-                            }
+                        renderable.m_voxelSpace.updateBuffers(*updateCommandBuffer.get());
                     }
 
                 if (renderable.m_descriptorSet->needsUpdate())
@@ -355,14 +348,14 @@ void renderer::recordCommandBuffer()
 
         for (auto &renderable : m_renderables)
             {
-                VkDeviceSize offsets[] = { 0 };
+                VkDeviceSize offsets[] = { renderable.m_voxelSpace.getVertexMemoryOffset() };
                 vulkanDescriptorSet *descriptorSet = renderable.m_descriptorSet->getDescriptorSet(m_frame);
 
-                vkCmdBindVertexBuffers(currentCommandBuffer, 0, 1, &renderable.m_vertexBuffer->getVertexBuffer().getUnderlyingBuffer(), offsets);
-                vkCmdBindIndexBuffer(currentCommandBuffer, renderable.m_indexBuffer->getIndexBuffer().getUnderlyingBuffer(), 0, VK_INDEX_TYPE_UINT32);
-
+                vkCmdBindIndexBuffer(currentCommandBuffer, renderable.m_voxelSpace.getBufferMemory().getUnderlyingBuffer(), 0, VK_INDEX_TYPE_UINT32);
+                vkCmdBindVertexBuffers(currentCommandBuffer, 0, 1, &renderable.m_voxelSpace.getBufferMemory().getUnderlyingBuffer(), offsets);
+                
                 vkCmdBindDescriptorSets(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_surface.m_pipelineLayout, 0, 1, &descriptorSet->getUnderlyingDescriptorSet(), 0, nullptr);
-                vkCmdDrawIndexed(currentCommandBuffer, renderable.m_indexBuffer->getIndexCount(), 1, 0, 0, 0);
+                vkCmdDrawIndexed(currentCommandBuffer, renderable.m_voxelSpace.getIndexCount(), 1, 0, 0, 0);
             }
 
         if (m_imGuiEnabled)

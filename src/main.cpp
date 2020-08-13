@@ -120,8 +120,6 @@ int main()
                         index = 0;
                     }
 
-                ImGui::ShowDemoWindow();
-
                 bool keyPressed = false;
                 while (accumulator >= updateRate)
                     {
@@ -193,7 +191,7 @@ int main()
                         camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0, -1.f, 0));
                         mvpUBO.bind(camera);
                     }
-                renderer.draw(*voxelSpaceDescriptor, space.getVertexBuffer(), space.getIndexBuffer());
+                renderer.draw(*voxelSpaceDescriptor, space);
 
                 renderer.preRecording();
                 renderer.recordCommandBuffer();

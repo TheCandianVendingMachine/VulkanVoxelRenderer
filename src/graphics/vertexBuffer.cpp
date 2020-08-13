@@ -35,6 +35,12 @@ void vertexBuffer::destroy()
         m_bufferSize = 0;
     }
 
+void vertexBuffer::clear()
+    {
+        m_vertices.clear();
+        m_updated = true;
+    }
+
 void vertexBuffer::addVertex(vertex vertex)
     {
         m_vertices.push_back(vertex);

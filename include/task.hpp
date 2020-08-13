@@ -39,8 +39,6 @@ class task
 
                             m_functionPtr = func;
                             m_functionOffset = offsetof(taskFunc, m_execute);
-
-                            TFuncResult();
                         }
                 };
 

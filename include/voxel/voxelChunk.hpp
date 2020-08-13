@@ -7,11 +7,12 @@
 
 class voxelChunk
     {
+        public:
+            using sizeType = std::vector<voxelType>::size_type;
+
         private:
             std::vector<voxelType> m_voxels;
             voxelType *m_voxelData = nullptr;
-
-            using sizeType = std::vector<voxelType>::size_type;
 
             sizeType m_sizeX = 0;
             sizeType m_sizeY = 0;
