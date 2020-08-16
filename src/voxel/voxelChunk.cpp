@@ -8,7 +8,7 @@ voxelChunk::voxelChunk(voxelChunk::sizeType sizeX, voxelChunk::sizeType sizeY, v
 
 void voxelChunk::create(voxelChunk::sizeType sizeX, voxelChunk::sizeType sizeY, voxelChunk::sizeType sizeZ)
     {
-        m_voxels.resize(sizeX * sizeY * sizeZ);
+        m_voxels.resize(sizeY * sizeX * sizeZ);
         m_sizeX = sizeX;
         m_sizeY = sizeY;
         m_sizeZ = sizeZ;
@@ -17,12 +17,12 @@ void voxelChunk::create(voxelChunk::sizeType sizeX, voxelChunk::sizeType sizeY, 
 
 const voxelType &voxelChunk::at(voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z) const
     {
-        return m_voxelData[x + m_sizeX * (y + m_sizeZ * z)];
+        return m_voxelData[x + m_sizeX * (y + m_sizeY * z)];
     }
 
 voxelType &voxelChunk::at(voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z)
     {
-        return m_voxelData[x + m_sizeX * (y + m_sizeZ * z)];
+        return m_voxelData[x + m_sizeX * (y + m_sizeY * z)];
     }
 
 const voxelType &voxelChunk::at(sizeType index) const
@@ -100,9 +100,9 @@ float voxelChunk::getVoxelSize() const
 
 void voxelChunk::mesh(std::vector<quad> &quads)
     {
-        for (int x = 0; x < m_sizeX; x++)
+        for (int y = 0; y < m_sizeY; y++)
             {
-                for (int y = 0; y < m_sizeY; y++)
+                for (int x = 0; x < m_sizeX; x++)
                     {
                         for (int z = 0; z < m_sizeZ; z++)
                             {

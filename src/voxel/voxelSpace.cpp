@@ -93,8 +93,8 @@ void voxelSpace::destroyChunk(chunkData &chunk)
 
 void voxelSpace::buildSlice(unsigned int y, const siv::PerlinNoise &noise)
     {
-        double globalFrequency = 0.85;
-        std::array<std::array<double, 2>, 2> surfaceFrequencies = {{
+        constexpr double globalFrequency = 0.85;
+        constexpr std::array<std::array<double, 2>, 2> surfaceFrequencies = {{
             {{ 1.0, 1.5 }},
             {{ 0.2, 4.0 }},
         }};
@@ -222,15 +222,16 @@ std::vector<float> noiseMapGenerator(int sizeX, int sizeY, int sizeZ, int seed, 
 void voxelSpace::createWorld(taskGraph *graph)
     {
         const siv::PerlinNoise noiseSurface(fe::random::get().generate<uint32_t>());
-        createChunk(m_testChunk, 480, 480, 480);
-        m_testChunk.m_chunk.setVoxelSize(0.1f);
+        createChunk(m_testChunk, 16, 256, 16);
+        m_testChunk.m_chunk.setVoxelSize(1.0f);
 
-        for (int i = 0; i < m_testChunk.m_sizeY; i++)
+        for (int i = 0; i < m_testChunk.m_chunk.getSizeY(); i++)
             {
                 graph->addTask(task(this, &voxelSpace::buildSlice), nullptr, i, noiseSurface);
             }
 
         graph->execute();
+        graph->clear(); 
 
         buildChunk(m_testChunk);
         updateMemory();
