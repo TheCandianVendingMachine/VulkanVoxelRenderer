@@ -10,7 +10,10 @@
 #include <glm/mat4x4.hpp>
 #include <vector>
 
+#include "PerlinNoise.hpp"
+
 class descriptorSet;
+class taskGraph;
 class voxelSpace
     {
         private:
@@ -65,13 +68,15 @@ class voxelSpace
             void buildChunk(chunkData &chunk);
             void destroyChunk(chunkData &chunk);
 
+            void buildSlice(unsigned int y, const siv::PerlinNoise &noise);
+
         public:
             voxelSpace() = default;
             ~voxelSpace();
             void create();
             void destroy();
 
-            void createWorld();
+            void createWorld(taskGraph *graph);
 
             glm::mat4 getModelTransformation() const;
             glm::vec<3, int> raycast(const glm::vec3 origin, const glm::vec3 direction);

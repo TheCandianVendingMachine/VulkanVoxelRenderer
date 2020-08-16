@@ -62,7 +62,6 @@ int main()
         constexpr float rotationSpeed = 60.f;
 
         voxelSpace space;
-        space.createWorld();
 
         camera.m_model = space.getModelTransformation();
 
@@ -71,7 +70,8 @@ int main()
         descriptorSet *voxelSpaceDescriptor = renderer.createDescriptorSet();
         voxelSpaceDescriptor->bindUBO(mvpUBO.getUniformBuffer(), mvpUBO.getBufferSize());
 
-        taskGraph taskGraph(1, 10);
+        taskGraph taskGraph(10, 10);
+        space.createWorld(&taskGraph);
 
         fe::clock frameClock;
         fe::clock programClock;

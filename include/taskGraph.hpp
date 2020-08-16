@@ -8,16 +8,46 @@
 #include <memory>
 #include <initializer_list>
 #include <mutex>
+#include <tuple>
+#include <assert.h>
 #include "task.hpp"
 
 class taskGraph
     {
         private:
+            struct nodeArgsBase
+                {
+                    virtual void execute(task &task)
+                        {
+                            task.execute();
+                        }
+                };
+
+            template <typename ...Args>
+            struct nodeArgs : nodeArgsBase
+                {
+                    std::tuple<Args...> m_argsTuple;
+                    template <typename ...Args>
+                    nodeArgs(Args ...args)
+                        {
+                            m_argsTuple = { args... };
+                        }
+
+                    virtual void execute(task &task) override final
+                        {
+                            auto applyFunc = [&task]<typename ...Args>(Args ...args){
+                                task.execute(args...);
+                            };
+                            std::apply(applyFunc, m_argsTuple);
+                        }
+                };
+
             struct node
                 {
                     std::vector<node*> m_parents;
                     std::vector<node*> m_children;
                     task m_task;
+                    std::unique_ptr<nodeArgsBase> m_args;
                     bool m_doneExecution = false;
                     bool m_inUse = false;
                     bool m_queued = false;
@@ -25,7 +55,7 @@ class taskGraph
 
                     void execute()
                         {
-                            m_task.execute();
+                            m_args->execute(m_task);
                             for (auto &child : m_children)
                                 {
                                     child->m_parentsDone++;
@@ -112,7 +142,10 @@ class taskGraph
 
             void initThreadPool(unsigned int threadCount);
             void initNodePool(unsigned int expectedNodeCount);
+
             std::size_t createNode(task task);
+            template<typename ...Args>
+            std::size_t createNode(task task, Args ...args);
 
         public:
             taskGraph(unsigned int expectedNodeCount = 10);
@@ -121,6 +154,9 @@ class taskGraph
 
             taskGraph::node *addTask(task task, taskGraph::node *required = nullptr);
             taskGraph::node *addTask(task task, std::initializer_list<taskGraph::node*> parents, std::initializer_list<taskGraph::node*> children);
+
+            template<typename ...Args>
+            taskGraph::node *addTask(task task, taskGraph::node *required = nullptr, Args ...args);
 
             void addParents(taskGraph::node *base, std::initializer_list<taskGraph::node*> parents);
             void addChildren(taskGraph::node *base, std::initializer_list<taskGraph::node*> children);
@@ -135,3 +171,45 @@ class taskGraph
             taskGraph &operator=(taskGraph &rhs);
 
     };
+
+template<typename ...Args>
+inline std::size_t taskGraph::createNode(task task, Args ...args)
+    {
+        assert(!m_executing);
+
+        if (m_nodePoolFreeIndices.empty())
+            {
+                std::size_t newSize = m_nodePool.size() * 2;
+                std::size_t oldSize = m_nodePool.size();
+                m_nodePool.resize(newSize);
+                for (std::size_t i = oldSize; i < newSize; i++)
+                    {
+                        m_nodePool[i] = std::make_unique<node>();
+                        m_nodePoolFreeIndices.push(i);
+                    }
+            }
+
+        std::size_t index = m_nodePoolFreeIndices.front();
+        m_nodePoolFreeIndices.pop();
+        m_nodePool[index]->m_task = task;
+        m_nodePool[index]->m_doneExecution = false;
+        m_nodePool[index]->m_inUse = true;
+        m_nodePool[index]->m_parentsDone = 0;
+        m_nodePool[index]->m_queued = false;
+        m_nodePool[index]->m_args = std::make_unique<nodeArgs<Args...>>(args...);
+        return index;
+    }
+
+template<typename ...Args>
+taskGraph::node *taskGraph::addTask(task task, taskGraph::node *required, Args ...args)
+    {
+        std::size_t index = createNode(task, args...);
+
+        if (required)
+            {
+                m_nodePool[index]->m_parents.push_back(required);
+                required->m_children.push_back(m_nodePool[index].get());
+            }
+
+        return m_nodePool[index].get();
+    }

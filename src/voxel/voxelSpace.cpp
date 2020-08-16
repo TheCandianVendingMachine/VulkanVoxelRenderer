@@ -3,7 +3,6 @@
 #include "graphics/quad.hpp"
 #include "graphics/descriptorSet.hpp"
 #include "typeDefines.hpp"
-#include "PerlinNoise.hpp"
 #include "random.hpp"
 #include "graphics/vulkan/vulkanAllocator.hpp"
 #include "graphics/vulkan/vulkanCommandBuffer.hpp"
@@ -11,6 +10,9 @@
 #include <vector>
 #include <array>
 #include <glm/gtx/quaternion.hpp>
+
+#include "taskGraph.hpp"
+#include "task.hpp"
 
 void voxelSpace::updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset)
     {
@@ -33,6 +35,8 @@ void voxelSpace::updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsign
 
 void voxelSpace::updateMemory()
     {
+        // over-allocate for worst case scenario so that we can have set memory block sizes.
+        // ceil(n^3 / 2) will result in worst case voxel count. Multiply by 8 to get vertices. Multiply by 6*8 to get indices
         unsigned int totalVertexCount = m_testChunk.m_vertexCount;
         unsigned int totalIndexCount = m_testChunk.m_indexCount;
 
@@ -84,6 +88,37 @@ void voxelSpace::destroyChunk(chunkData &chunk)
         for (auto &voxelData : chunk.m_voxelData)
             {
                 voxelData.m_quads.clear();
+            }
+    }
+
+void voxelSpace::buildSlice(unsigned int y, const siv::PerlinNoise &noise)
+    {
+        double globalFrequency = 0.85;
+        std::array<std::array<double, 2>, 2> surfaceFrequencies = {{
+            {{ 1.0, 1.5 }},
+            {{ 0.2, 4.0 }},
+        }};
+
+        double ny = (static_cast<double>(y) / m_testChunk.m_chunk.getSizeY());
+        for (int x = 0; x < m_testChunk.m_chunk.getSizeX(); x++)
+            {
+                double nx = (static_cast<double>(x) / m_testChunk.m_chunk.getSizeX());
+                for (int z = 0; z < m_testChunk.m_chunk.getSizeZ(); z++)
+                    {
+                        double nz = (static_cast<double>(z) / m_testChunk.m_chunk.getSizeZ());
+                        double surfaceNoise = 0.0;
+                        for (const auto &frequency : surfaceFrequencies)
+                            {
+                                surfaceNoise += globalFrequency * frequency[0] * noise.noise3D_0_1(frequency[1] * nx, frequency[1] * ny, frequency[1] * nz);
+                            }
+
+                        voxelType type = voxelType::NONE;
+                        if (surfaceNoise < 0.5)
+                            {
+                                type = voxelType::DEFAULT;
+                            }
+                        m_testChunk.m_chunk.at(x, y, z) = type;
+                    }
             }
     }
 
@@ -184,41 +219,18 @@ std::vector<float> noiseMapGenerator(int sizeX, int sizeY, int sizeZ, int seed, 
         return noise;
     }
 
-void voxelSpace::createWorld()
+void voxelSpace::createWorld(taskGraph *graph)
     {
-        double globalFrequency = 0.85;
-        std::array<std::array<double, 2>, 2> surfaceFrequencies = {{
-            {{ 1.0, 1.5 }},
-            {{ 0.2, 4.0 }},
-        }};
-
         const siv::PerlinNoise noiseSurface(fe::random::get().generate<uint32_t>());
-        createChunk(m_testChunk, 48, 48, 48);
+        createChunk(m_testChunk, 480, 480, 480);
+        m_testChunk.m_chunk.setVoxelSize(0.1f);
 
-        for (int x = 0; x < m_testChunk.m_chunk.getSizeX(); x++)
+        for (int i = 0; i < m_testChunk.m_sizeY; i++)
             {
-                double nx = (static_cast<double>(x) / m_testChunk.m_chunk.getSizeX());
-                for (int y = 0; y < m_testChunk.m_chunk.getSizeY(); y++)
-                    {
-                        double ny = (static_cast<double>(y) / m_testChunk.m_chunk.getSizeY());
-                        for (int z = 0; z < m_testChunk.m_chunk.getSizeZ(); z++)
-                            {
-                                double nz = (static_cast<double>(z) / m_testChunk.m_chunk.getSizeZ());
-                                double surfaceNoise = 0.0;
-                                for (const auto &frequency : surfaceFrequencies)
-                                    {
-                                        surfaceNoise += globalFrequency * frequency[0] * noiseSurface.noise3D_0_1(frequency[1] * nx, frequency[1] * ny, frequency[1] * nz);
-                                    }
-
-                                voxelType type = voxelType::NONE;
-                                if (surfaceNoise < 0.5)
-                                    {
-                                        type = voxelType::DEFAULT;
-                                    }
-                                m_testChunk.m_chunk.at(x, y, z) = type;
-                            }
-                    }
+                graph->addTask(task(this, &voxelSpace::buildSlice), nullptr, i, noiseSurface);
             }
+
+        graph->execute();
 
         buildChunk(m_testChunk);
         updateMemory();

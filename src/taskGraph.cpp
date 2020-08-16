@@ -42,6 +42,7 @@ std::size_t taskGraph::createNode(task task)
         m_nodePool[index]->m_inUse = true;
         m_nodePool[index]->m_parentsDone = 0;
         m_nodePool[index]->m_queued = false;
+        m_nodePool[index]->m_args = std::make_unique<nodeArgsBase>();
         return index;
     }
 
@@ -199,6 +200,7 @@ void taskGraph::execute()
                         if (executor.m_isProcessing || !executor.m_enqueuedNodes.empty())
                             {
                                 isProcessing = true;
+                                break;
                             }
                     }
             }
