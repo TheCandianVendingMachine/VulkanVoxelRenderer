@@ -116,6 +116,11 @@ void taskGraph::clear()
         for (std::size_t i = 0; i < m_nodePool.size(); i++)
             {
                 m_nodePoolFreeIndices.push(i);
+
+                m_nodePool[i]->m_doneExecution = false;
+                m_nodePool[i]->m_inUse = false;
+                m_nodePool[i]->m_parentsDone = 0;
+                m_nodePool[i]->m_queued = false;
             }
 
         m_enqueuedNodes.clear();
