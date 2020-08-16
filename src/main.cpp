@@ -61,7 +61,7 @@ int main()
         constexpr float speed = 16.f;
         constexpr float rotationSpeed = 60.f;
 
-        taskGraph taskGraph(1, 500);
+        taskGraph taskGraph(10, 500);
         voxelSpace space;
         space.createWorld(&taskGraph);
         camera.m_model = space.getModelTransformation();

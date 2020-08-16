@@ -14,11 +14,8 @@
 #include "taskGraph.hpp"
 #include "task.hpp"
 
-void voxelSpace::updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset)
+void voxelSpace::updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset, int &vertexOffset, int &indexOffset)
     {
-        unsigned int vertexOffset = 0;
-        unsigned int indexOffset = 0;
-
         fe::uInt8 *cpuStagingBuffer = static_cast<fe::uInt8*>(m_localBuffer.m_cpuStagingBuffer);
         for (auto &voxelData : chunk.m_voxelData)
             {
@@ -37,8 +34,8 @@ void voxelSpace::updateMemory()
     {
         // over-allocate for worst case scenario so that we can have set memory block sizes.
         // ceil(n^3 / 2) will result in worst case voxel count. Multiply by 8 to get vertices. Multiply by 6*8 to get indices
-        unsigned int totalVertexCount = m_testChunk.m_vertexCount;
-        unsigned int totalIndexCount = m_testChunk.m_indexCount;
+        unsigned int totalVertexCount = getVertexCount();
+        unsigned int totalIndexCount = getIndexCount();
 
         if (m_localBuffer.m_maxVertexCount < totalVertexCount || m_localBuffer.m_maxIndexCount < totalIndexCount)
             {
@@ -46,10 +43,15 @@ void voxelSpace::updateMemory()
             }
 
         // for all chunks
-        updateChunkMemory(m_testChunk, static_cast<fe::int8*>(m_localBuffer.m_cpuStagingBuffer) + 0, getVertexMemoryOffset());
+        int vertexOffset = 0;
+        int indexOffset = 0;
+        for (auto &chunk : m_loadedChunks)
+            {
+                updateChunkMemory(chunk.second, static_cast<fe::int8*>(m_localBuffer.m_cpuStagingBuffer), getVertexMemoryOffset(), vertexOffset, indexOffset);
+            }
     }
 
-void voxelSpace::createChunk(chunkData &chunk, const voxelChunk::sizeType sizeX, const voxelChunk::sizeType sizeY, const voxelChunk::sizeType sizeZ)
+void voxelSpace::createChunk(chunkData &chunk, const voxelChunk::sizeType sizeX, const voxelChunk::sizeType sizeY, const voxelChunk::sizeType sizeZ, const voxelChunk::sizeType posX, const voxelChunk::sizeType posY, const voxelChunk::sizeType posZ)
     {
         chunk.m_chunk.create(sizeX, sizeY, sizeZ);
 
@@ -65,19 +67,21 @@ void voxelSpace::createChunk(chunkData &chunk, const voxelChunk::sizeType sizeX,
         chunk.m_sizeX = sizeX;
         chunk.m_sizeY = sizeY;
         chunk.m_sizeZ = sizeZ;
+
+        chunk.m_positionX = posX;
+        chunk.m_positionY = posY;
+        chunk.m_positionZ = posZ;
     }
 
-void voxelSpace::buildChunk(chunkData &chunk)
+void voxelSpace::buildChunk(chunkData &chunk, unsigned int &totalIndexOffset)
     {
         chunk.m_vertexCount = 0;
         chunk.m_indexCount = 0;
 
-        unsigned int totalIndexOffset = 0;
-
         buildChunkMesh(chunk);
         for (auto &subChunk : chunk.m_voxelData)
             {
-                totalIndexOffset = buildGeometry(subChunk, totalIndexOffset);
+                totalIndexOffset = buildGeometry(glm::vec3{ chunk.m_positionX, chunk.m_positionY, chunk.m_positionZ }, subChunk, totalIndexOffset);
                 chunk.m_vertexCount += subChunk.m_vertices.size();
                 chunk.m_indexCount += subChunk.m_indices.size();
             }
@@ -91,33 +95,20 @@ void voxelSpace::destroyChunk(chunkData &chunk)
             }
     }
 
-void voxelSpace::buildSlice(unsigned int y, const siv::PerlinNoise &noise)
+void voxelSpace::buildSlice(chunkData &chunk, unsigned int y, const FastNoise &noise)
     {
-        constexpr double globalFrequency = 0.85;
-        constexpr std::array<std::array<double, 2>, 2> surfaceFrequencies = {{
-            {{ 1.0, 1.5 }},
-            {{ 0.2, 4.0 }},
-        }};
-
-        double ny = (static_cast<double>(y) / m_testChunk.m_chunk.getSizeY());
-        for (int x = 0; x < m_testChunk.m_chunk.getSizeX(); x++)
+        for (int x = 0; x < chunk.m_chunk.getSizeX(); x++)
             {
-                double nx = (static_cast<double>(x) / m_testChunk.m_chunk.getSizeX());
-                for (int z = 0; z < m_testChunk.m_chunk.getSizeZ(); z++)
+                for (int z = 0; z < chunk.m_chunk.getSizeZ(); z++)
                     {
-                        double nz = (static_cast<double>(z) / m_testChunk.m_chunk.getSizeZ());
-                        double surfaceNoise = 0.0;
-                        for (const auto &frequency : surfaceFrequencies)
-                            {
-                                surfaceNoise += globalFrequency * frequency[0] * noise.noise3D_0_1(frequency[1] * nx, frequency[1] * ny, frequency[1] * nz);
-                            }
-
                         voxelType type = voxelType::NONE;
-                        if (surfaceNoise < 0.5)
+                        float surface = (1.f + noise.GetNoise(x + chunk.m_positionX, y + chunk.m_positionY, z + chunk.m_positionZ)) / 2.f;
+
+                        if (surface < 0.5f)
                             {
                                 type = voxelType::DEFAULT;
                             }
-                        m_testChunk.m_chunk.at(x, y, z) = type;
+                        chunk.m_chunk.at(x, y, z) = type;
                     }
             }
     }
@@ -133,107 +124,43 @@ void voxelSpace::create()
 
 void voxelSpace::destroy()
     {
-        destroyChunk(m_testChunk);
+        for (auto &chunk : m_loadedChunks)
+            {
+                destroyChunk(chunk.second);
+            }
         m_localBuffer.destroy();
-    }
-
-std::vector<float> noiseMapGenerator(int sizeX, int sizeY, int sizeZ, int seed, float scale, int octaves, float persistance, float lacunarity, glm::vec3 offset)
-    {
-        std::vector<float> noise(sizeX * sizeY * sizeZ);
-        const siv::PerlinNoise noiseGenerator(seed);
-
-        std::vector<glm::vec3> octaveOffsets(octaves);
-        for (int i = 0; i < octaves; octaves++)
-            {
-                float offsetX = fe::random::get().generate(-100000.f, 100000.f) + offset.x;
-                float offsetY = fe::random::get().generate(-100000.f, 100000.f) + offset.y;
-                float offsetZ = fe::random::get().generate(-100000.f, 100000.f) + offset.z;
-
-                octaveOffsets[i] = { offsetX, offsetY, offsetZ };
-            }
-
-        if (scale <= 0.f)
-            {
-                scale = 0.000000001f;
-            }
-
-        float maxNoiseHeight = std::numeric_limits<float>::min();
-        float minNoiseHeight = std::numeric_limits<float>::max();
-
-        float halfWidth = static_cast<float>(sizeX) / 2.f;
-        float halfHeight = static_cast<float>(sizeY) / 2.f;
-        float halfDepth = static_cast<float>(sizeZ) / 2.f;
-
-        for (int y = 0; y < sizeY; y++)
-            {
-                for (int z = 0; z < sizeZ; z++)
-                    {
-                        for (int x = 0; x < sizeX; x++)
-                            {
-                                float amplitude = 1.f;
-                                float frequency = 1.f;
-                                float noiseHeight = 0.f;
-
-                                for (int i = 0; i < octaves; i++)
-                                    {
-                                        float sampleX = (x - halfWidth) / scale * frequency + octaveOffsets[i].x;
-                                        float sampleY = (y - halfHeight) / scale * frequency + octaveOffsets[i].y;
-                                        float sampleZ = (z - halfDepth) / scale * frequency + octaveOffsets[i].z;
-
-                                        float perlinValue = static_cast<float>(noiseGenerator.noise3D(sampleX, sampleY, sampleZ));
-                                        noiseHeight += perlinValue * amplitude;
-
-                                        amplitude += persistance;
-                                        frequency += lacunarity;
-                                    }
-
-                                if (noiseHeight > maxNoiseHeight)
-                                    {
-                                        maxNoiseHeight = noiseHeight;
-                                    }
-                                if (noiseHeight < minNoiseHeight)
-                                    {
-                                        minNoiseHeight = noiseHeight;
-                                    }
-
-                                noise[x + sizeX * (y + sizeZ * z)] = noiseHeight;
-                            }
-                    }
-            }
-
-        for (int y = 0; y < sizeY; y++)
-            {
-                for (int z = 0; z < sizeZ; z++)
-                    {
-                        for (int x = 0; x < sizeX; x++)
-                            {
-                                float currentNoise = noise[x + sizeX * (y + sizeZ * z)];
-                                // inverse lerp: (v - a) / (a - b)
-                                currentNoise = (currentNoise - minNoiseHeight) / (maxNoiseHeight - minNoiseHeight);
-
-                                noise[x + sizeX * (y + sizeZ * z)] = currentNoise;
-                            }
-                    }
-            }
-
-        return noise;
     }
 
 void voxelSpace::createWorld(taskGraph *graph)
     {
-        const siv::PerlinNoise noiseSurface(fe::random::get().generate<uint32_t>());
-        createChunk(m_testChunk, 16, 256, 16);
-        m_testChunk.m_chunk.setVoxelSize(1.0f);
+        FastNoise noiseSurface(fe::random::get().generate<uint32_t>());
+        noiseSurface.SetNoiseType(FastNoise::Perlin);
+        noiseSurface.SetFrequency(0.05f);
 
-        for (int i = 0; i < m_testChunk.m_chunk.getSizeY(); i++)
+        for (int x = 0; x < 5; x++)
             {
-                graph->addTask(task(this, &voxelSpace::buildSlice), nullptr, i, noiseSurface);
+                for (int z = 0; z < 5; z++)
+                    {
+                        createChunk(m_loadedChunks[glm::ivec3{ x, 0, z }], 64, 32, 64, 64 * x, 0, 64 * z);
+                    }
+            }
+        
+        for (auto &chunk : m_loadedChunks)
+            {
+                for (int i = 0; i < chunk.second.m_chunk.getSizeY(); i++)
+                    {
+                        graph->addTask(task(this, &voxelSpace::buildSlice), nullptr, chunk.second, i, noiseSurface);
+                    }
             }
 
         graph->execute();
         graph->clear(); 
 
-        buildChunk(m_testChunk);
+        unsigned int offset = 0;
+        for (auto &chunk : m_loadedChunks)
+            {
+                buildChunk(chunk.second, offset);
+            }
         updateMemory();
 
         m_translation = glm::translate(glm::mat4(1.f), glm::vec3{0.f, 0.f, 0.f});
@@ -250,7 +177,8 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
         constexpr float gridOffset = 0.000001f;
 
         glm::vec3 worldPosition = getModelTransformation() * glm::vec4(origin, 0.f);
-        glm::vec<3, int> gridPosition = worldPosition / m_testChunk.m_chunk.getVoxelSize();
+        assert(false); // implement multi-chunk
+        glm::vec<3, int> gridPosition = {0, 0, 0}; //worldPosition / m_testChunk.m_chunk.getVoxelSize();
 
         glm::vec3 deltaDistance = glm::abs(1.f / direction);
         glm::vec3 sideDistance;
@@ -290,7 +218,8 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
             }
 
         int stepCount = 0;
-        const int maxStepCount = static_cast<int>(m_testChunk.m_chunk.getSizeX() + m_testChunk.m_chunk.getSizeY() + m_testChunk.m_chunk.getSizeZ());
+        assert(false); // implement multi-chunk
+        const int maxStepCount = 0; //static_cast<int>(m_testChunk.m_chunk.getSizeX() + m_testChunk.m_chunk.getSizeY() + m_testChunk.m_chunk.getSizeZ());
         while (stepCount++ <= maxStepCount)
             {
                 if (sideDistance.x < sideDistance.z)
@@ -320,14 +249,15 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
                             }
                     }
 
-                if (m_testChunk.m_chunk.withinBounds(gridPosition.x, gridPosition.y, gridPosition.z))
+                assert(false); // write multi-chunk
+                /*if (m_testChunk.m_chunk.withinBounds(gridPosition.x, gridPosition.y, gridPosition.z))
                     {
                         voxelType type = m_testChunk.m_chunk.at(gridPosition.x, gridPosition.y, gridPosition.z);
                         if (type != voxelType::NONE)
                             {
                                 return gridPosition;
                             }
-                    }
+                    }*/
             }
 
         return {};
@@ -369,7 +299,10 @@ VkDeviceSize voxelSpace::getVertexBufferSize() const
 unsigned int voxelSpace::getVertexCount() const
     {
         unsigned int vertexCount = 0;
-        vertexCount += m_testChunk.m_vertexCount;
+        for (auto &chunk : m_loadedChunks)
+            {
+                vertexCount += chunk.second.m_vertexCount;
+            }
 
         return vertexCount;
     }
@@ -377,7 +310,10 @@ unsigned int voxelSpace::getVertexCount() const
 unsigned int voxelSpace::getIndexCount() const
     {
         unsigned int indexCount = 0;
-        indexCount += m_testChunk.m_indexCount;
+        for (auto &chunk : m_loadedChunks)
+            {
+                indexCount += chunk.second.m_indexCount;
+            }
 
         return indexCount;
     }
@@ -414,7 +350,7 @@ void buildChunkMesh(voxelSpace::chunkData &chunkData)
             }
     }
 
-unsigned int buildGeometry(voxelSpace::chunkVoxelData &voxelData, unsigned int indexOffset)
+unsigned int buildGeometry(glm::vec3 offset, voxelSpace::chunkVoxelData &voxelData, unsigned int indexOffset)
     {
         vertex vertexArr[4] = {};
         vertex &v0 = vertexArr[0];
@@ -512,6 +448,11 @@ unsigned int buildGeometry(voxelSpace::chunkVoxelData &voxelData, unsigned int i
                         default:
                             break;
                     }
+
+                v0.m_position += offset;
+                v1.m_position += offset;
+                v2.m_position += offset;
+                v3.m_position += offset;
 
                 voxelData.m_vertices.insert(voxelData.m_vertices.end(), vertexArr, vertexArr + 4);
                 if (quad.m_orientation < 0)

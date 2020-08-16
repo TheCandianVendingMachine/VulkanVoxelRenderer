@@ -6,11 +6,13 @@
 #include "graphics/vertexBuffer.hpp"
 #include "graphics/indexBuffer.hpp"
 #include "graphics/quad.hpp"
+#include <glm/gtx/hash.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/mat4x4.hpp>
 #include <vector>
+#include <unordered_map>
 
-#include "PerlinNoise.hpp"
+#include "FastNoise.h"
 
 class descriptorSet;
 class taskGraph;
@@ -31,6 +33,9 @@ class voxelSpace
                     voxelChunk::sizeType m_sizeX = 0;
                     voxelChunk::sizeType m_sizeY = 0;
                     voxelChunk::sizeType m_sizeZ = 0;
+                    voxelChunk::sizeType m_positionX = 0;
+                    voxelChunk::sizeType m_positionY = 0;
+                    voxelChunk::sizeType m_positionZ = 0;
                     voxelChunk::sizeType m_subSize = 0;
                     unsigned int m_vertexCount = 0;
                     unsigned int m_indexCount = 0;
@@ -51,24 +56,24 @@ class voxelSpace
                     void destroy();
                 };
 
-            static constexpr voxelChunk::sizeType c_chunkSubSize = 10;
+            static constexpr voxelChunk::sizeType c_chunkSubSize = 32;
             localBuffer m_localBuffer;
-            chunkData m_testChunk;
+            std::unordered_map<glm::ivec3, chunkData> m_loadedChunks;
 
             glm::mat4 m_translation;
             glm::quat m_quaternion;
 
             friend void buildChunkMesh(chunkData &chunkData);
-            friend unsigned int buildGeometry(chunkVoxelData &voxelData, unsigned int indexOffset);
+            friend unsigned int buildGeometry(glm::vec3 offset, chunkVoxelData &voxelData, unsigned int indexOffset);
 
-            void updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset);
+            void updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset, int &vertexOffset, int &indexOffset);
             void updateMemory();
 
-            void createChunk(chunkData &chunk, const voxelChunk::sizeType sizeX, const voxelChunk::sizeType sizeY, const voxelChunk::sizeType sizeZ);
-            void buildChunk(chunkData &chunk);
+            void createChunk(chunkData &chunk, const voxelChunk::sizeType sizeX, const voxelChunk::sizeType sizeY, const voxelChunk::sizeType sizeZ, const voxelChunk::sizeType posX, const voxelChunk::sizeType posY, const voxelChunk::sizeType posZ);
+            void buildChunk(chunkData &chunk, unsigned int &totalIndexOffset);
             void destroyChunk(chunkData &chunk);
 
-            void buildSlice(unsigned int y, const siv::PerlinNoise &noise);
+            void buildSlice(chunkData &chunk, unsigned int y, const FastNoise &noise);
 
         public:
             voxelSpace() = default;
