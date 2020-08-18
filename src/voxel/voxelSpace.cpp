@@ -13,9 +13,11 @@
 
 #include "taskGraph.hpp"
 #include "task.hpp"
+#include <optick.h>
 
 void voxelSpace::updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset, int &vertexOffset, int &indexOffset)
     {
+        OPTICK_EVENT();
         fe::uInt8 *cpuStagingBuffer = static_cast<fe::uInt8*>(m_localBuffer.m_cpuStagingBuffer);
         for (auto &voxelData : chunk.m_voxelData)
             {
@@ -32,6 +34,8 @@ void voxelSpace::updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsign
 
 void voxelSpace::updateMemory()
     {
+        OPTICK_CATEGORY("VoxelMemory", Optick::Category::Rendering);
+        OPTICK_EVENT();
         // over-allocate for worst case scenario so that we can have set memory block sizes.
         // ceil(n^3 / 2) will result in worst case voxel count. Multiply by 8 to get vertices. Multiply by 6*8 to get indices
         unsigned int totalVertexCount = getVertexCount();
@@ -49,17 +53,17 @@ void voxelSpace::updateMemory()
             {
                 updateChunkMemory(chunk.second, static_cast<fe::int8*>(m_localBuffer.m_cpuStagingBuffer), getVertexMemoryOffset(), vertexOffset, indexOffset);
             }
+        m_localBuffer.m_needUpdate = true;
     }
 
 void voxelSpace::createChunk(chunkData &chunk, const voxelChunk::sizeType sizeX, const voxelChunk::sizeType sizeY, const voxelChunk::sizeType sizeZ, const voxelChunk::sizeType posX, const voxelChunk::sizeType posY, const voxelChunk::sizeType posZ)
     {
         chunk.m_chunk.create(sizeX, sizeY, sizeZ);
+        chunk.m_chunk.setVoxelSize(c_voxelSize);
 
-        // We are getting the best number to subdivide our chunk to the threshold we want
-        // We over-estimate the actual size so we dont leave out data. I would rather extra than too few
-        voxelChunk::sizeType subChunkCountX = (sizeX + (c_chunkSubSize - (sizeX % c_chunkSubSize))) / c_chunkSubSize;
-        voxelChunk::sizeType subChunkCountY = (sizeY + (c_chunkSubSize - (sizeY % c_chunkSubSize))) / c_chunkSubSize;
-        voxelChunk::sizeType subChunkCountZ = (sizeZ + (c_chunkSubSize - (sizeZ % c_chunkSubSize))) / c_chunkSubSize;
+        voxelChunk::sizeType subChunkCountX = static_cast<voxelChunk::sizeType>(std::ceil(static_cast<float>(sizeX) / c_chunkSubSize));
+        voxelChunk::sizeType subChunkCountY = static_cast<voxelChunk::sizeType>(std::ceil(static_cast<float>(sizeY) / c_chunkSubSize));
+        voxelChunk::sizeType subChunkCountZ = static_cast<voxelChunk::sizeType>(std::ceil(static_cast<float>(sizeZ) / c_chunkSubSize));
 
         chunk.m_voxelData.resize(static_cast<std::size_t>(subChunkCountX * subChunkCountY * subChunkCountZ));
         chunk.m_subSize = c_chunkSubSize;
@@ -75,12 +79,16 @@ void voxelSpace::createChunk(chunkData &chunk, const voxelChunk::sizeType sizeX,
 
 void voxelSpace::buildChunk(chunkData &chunk, unsigned int &totalIndexOffset)
     {
+        OPTICK_CATEGORY("VoxelChunkCreation", Optick::Category::Rendering);
+        OPTICK_EVENT();
         chunk.m_vertexCount = 0;
         chunk.m_indexCount = 0;
 
         buildChunkMesh(chunk);
         for (auto &subChunk : chunk.m_voxelData)
             {
+                subChunk.m_indices.clear();
+                subChunk.m_vertices.clear();
                 totalIndexOffset = buildGeometry(glm::vec3{ chunk.m_positionX, chunk.m_positionY, chunk.m_positionZ }, subChunk, totalIndexOffset);
                 chunk.m_vertexCount += subChunk.m_vertices.size();
                 chunk.m_indexCount += subChunk.m_indices.size();
@@ -113,6 +121,22 @@ void voxelSpace::buildSlice(chunkData &chunk, unsigned int y, const FastNoise &n
             }
     }
 
+void voxelSpace::transformSpace(glm::vec3 globalPosition, glm::ivec3 &chunkPos, glm::vec3 &localPos) const
+    {
+        transformChunkSpace(globalPosition, chunkPos);
+        transformLocalSpace(globalPosition, localPos);
+    }
+
+void voxelSpace::transformChunkSpace(glm::vec3 globalPosition, glm::ivec3 &chunkPos) const
+    {
+        chunkPos = glm::floor(globalPosition / static_cast<glm::vec3>(c_chunkSize));
+    }
+
+void voxelSpace::transformLocalSpace(glm::vec3 globalPosition, glm::vec3 &localPos) const
+    {
+        localPos = glm::mod(globalPosition, static_cast<glm::vec3>(c_chunkSize));
+    }
+
 voxelSpace::~voxelSpace()
     {
         destroy();
@@ -134,14 +158,17 @@ void voxelSpace::destroy()
 void voxelSpace::createWorld(taskGraph *graph)
     {
         FastNoise noiseSurface(fe::random::get().generate<uint32_t>());
-        noiseSurface.SetNoiseType(FastNoise::Perlin);
+        noiseSurface.SetNoiseType(FastNoise::NoiseType::ValueFractal);
         noiseSurface.SetFrequency(0.05f);
+        noiseSurface.SetFractalOctaves(5);
+        noiseSurface.SetFractalLacunarity(2.0);
+        noiseSurface.SetFractalGain(0.4);
 
         for (int x = 0; x < 5; x++)
             {
                 for (int z = 0; z < 5; z++)
                     {
-                        createChunk(m_loadedChunks[glm::ivec3{ x, 0, z }], 64, 32, 64, 64 * x, 0, 64 * z);
+                        createChunk(m_loadedChunks[glm::ivec3{ x, 0, z }], c_chunkSize.x, c_chunkSize.y, c_chunkSize.z, c_chunkSize.x * x, 0, c_chunkSize.z * z);
                     }
             }
         
@@ -159,6 +186,7 @@ void voxelSpace::createWorld(taskGraph *graph)
         unsigned int offset = 0;
         for (auto &chunk : m_loadedChunks)
             {
+                chunk.second.m_indexOffset = offset;
                 buildChunk(chunk.second, offset);
             }
         updateMemory();
@@ -174,15 +202,17 @@ glm::mat4 voxelSpace::getModelTransformation() const
 
 glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 direction)
     {
+        OPTICK_EVENT();
         constexpr float gridOffset = 0.000001f;
 
         glm::vec3 worldPosition = getModelTransformation() * glm::vec4(origin, 0.f);
-        assert(false); // implement multi-chunk
-        glm::vec<3, int> gridPosition = {0, 0, 0}; //worldPosition / m_testChunk.m_chunk.getVoxelSize();
+        glm::ivec3 chunkPosition{};
+        glm::vec3 localPosition{};
 
+        glm::ivec3 gridPosition = glm::round(worldPosition / c_voxelSize);
         glm::vec3 deltaDistance = glm::abs(1.f / direction);
         glm::vec3 sideDistance;
-        glm::vec<3, int> step;
+        glm::ivec3 step;
 
         if (direction.x < 0.f)
             {
@@ -218,8 +248,7 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
             }
 
         int stepCount = 0;
-        assert(false); // implement multi-chunk
-        const int maxStepCount = 0; //static_cast<int>(m_testChunk.m_chunk.getSizeX() + m_testChunk.m_chunk.getSizeY() + m_testChunk.m_chunk.getSizeZ());
+        const int maxStepCount = glm::length(static_cast<glm::vec3>(c_chunkSize)) * m_loadedChunks.size();
         while (stepCount++ <= maxStepCount)
             {
                 if (sideDistance.x < sideDistance.z)
@@ -249,15 +278,15 @@ glm::vec<3, int> voxelSpace::raycast(const glm::vec3 origin, const glm::vec3 dir
                             }
                     }
 
-                assert(false); // write multi-chunk
-                /*if (m_testChunk.m_chunk.withinBounds(gridPosition.x, gridPosition.y, gridPosition.z))
+                transformSpace(gridPosition, chunkPosition, localPosition);
+                if (m_loadedChunks.find(chunkPosition) != m_loadedChunks.end())
                     {
-                        voxelType type = m_testChunk.m_chunk.at(gridPosition.x, gridPosition.y, gridPosition.z);
+                        voxelType type = m_loadedChunks.at(chunkPosition).m_chunk.at(localPosition.x, localPosition.y, localPosition.z);
                         if (type != voxelType::NONE)
                             {
                                 return gridPosition;
                             }
-                    }*/
+                    }
             }
 
         return {};
@@ -318,13 +347,41 @@ unsigned int voxelSpace::getIndexCount() const
         return indexCount;
     }
 
+const voxelType &voxelSpace::at(glm::vec3 position) const
+    {
+        OPTICK_EVENT();
+        glm::ivec3 chunkPosition{};
+        glm::vec3 localPosition{};
+        transformSpace(position, chunkPosition, localPosition);
+        assert(m_loadedChunks.find(chunkPosition) != m_loadedChunks.end());
+        return m_loadedChunks.at(chunkPosition).m_chunk.at(localPosition.x, localPosition.y, localPosition.z);
+    }
+
+void voxelSpace::setAt(glm::vec3 position, voxelType type)
+    {
+        OPTICK_EVENT();
+        glm::ivec3 chunkPosition{};
+        glm::vec3 localPosition{};
+        transformSpace(position, chunkPosition, localPosition);
+        assert(m_loadedChunks.find(chunkPosition) != m_loadedChunks.end());
+        m_loadedChunks.at(chunkPosition).m_chunk.at(localPosition.x, localPosition.y, localPosition.z) = type;
+
+        unsigned int offset = m_loadedChunks.at(chunkPosition).m_indexOffset;
+        buildChunk(m_loadedChunks.at(chunkPosition), offset);
+        updateMemory();
+    }
+
 void buildChunkMesh(voxelSpace::chunkData &chunkData)
     {
+        OPTICK_EVENT();
         voxelChunk::sizeType x = 0;
         voxelChunk::sizeType y = 0;
         voxelChunk::sizeType z = 0;
+        OPTICK_TAG("VoxelDataSize", chunkData.m_voxelData.size());
+        OPTICK_TAG("VoxelSubSize", chunkData.m_subSize);
         for (auto &voxelData : chunkData.m_voxelData)
             {
+                voxelData.m_quads.clear();
                 for (voxelChunk::sizeType yIncrement = 0; yIncrement < chunkData.m_subSize; yIncrement++)
                     {
                         for (voxelChunk::sizeType xIncrement = 0; xIncrement < chunkData.m_subSize; xIncrement++)
@@ -337,11 +394,11 @@ void buildChunkMesh(voxelSpace::chunkData &chunkData)
                     }
 
                 x += chunkData.m_subSize;
-                if (x > chunkData.m_sizeX)
+                if (x >= chunkData.m_sizeX)
                     {
                         x = 0;
                         y += chunkData.m_subSize;
-                        if (y > chunkData.m_sizeY)
+                        if (y >= chunkData.m_sizeY)
                             {
                                 y = 0;
                                 z += chunkData.m_subSize;
@@ -352,6 +409,7 @@ void buildChunkMesh(voxelSpace::chunkData &chunkData)
 
 unsigned int buildGeometry(glm::vec3 offset, voxelSpace::chunkVoxelData &voxelData, unsigned int indexOffset)
     {
+        OPTICK_EVENT();
         vertex vertexArr[4] = {};
         vertex &v0 = vertexArr[0];
         vertex &v1 = vertexArr[1];

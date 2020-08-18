@@ -1,6 +1,7 @@
 #include "graphics/sphere.hpp"
 #include "graphics/indexBuffer.hpp"
 #include "graphics/vertexBuffer.hpp"
+#include <cmath>
 
 void sphere::generateVertices(int resolution)
     {

@@ -1,4 +1,5 @@
 #include "voxel/voxelChunk.hpp"
+#include <optick.h>
 #include <fstream>
 
 voxelChunk::voxelChunk(voxelChunk::sizeType sizeX, voxelChunk::sizeType sizeY, voxelChunk::sizeType sizeZ)
@@ -67,6 +68,7 @@ voxelChunk::sizeType voxelChunk::getVolume() const
 
 void voxelChunk::write(const char *file)
     {
+        OPTICK_EVENT();
         std::vector<char> voxelBuffer(m_voxels.size() * sizeof(std::underlying_type<voxelType>::type));
         std::memcpy(voxelBuffer.data(), m_voxels.data(), m_voxels.size());
 
@@ -77,6 +79,7 @@ void voxelChunk::write(const char *file)
 
 void voxelChunk::read(const char *file)
     {
+        OPTICK_EVENT();
         std::ifstream in(file, std::ios::ate | std::ios::binary);
         std::size_t fileSize = static_cast<std::size_t>(in.tellg());
         std::vector<char> buffer(fileSize);
@@ -100,6 +103,7 @@ float voxelChunk::getVoxelSize() const
 
 void voxelChunk::mesh(std::vector<quad> &quads)
     {
+        OPTICK_EVENT();
         for (int y = 0; y < m_sizeY; y++)
             {
                 for (int x = 0; x < m_sizeX; x++)

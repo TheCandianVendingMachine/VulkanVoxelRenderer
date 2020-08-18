@@ -20,6 +20,7 @@
 #include "voxel/voxelSpace.hpp"
 
 #include "imgui.h"
+#include <optick.h>
 
 struct mvp
     {
@@ -84,6 +85,7 @@ int main()
         double accumulator = 0.0;
         while (app.isOpen())
             {
+                OPTICK_FRAME("MainThread");
                 newTime = updateClock.getTime().asSeconds();
                 frameTime = newTime - currentTime;
 
@@ -117,9 +119,11 @@ int main()
                         index = 0;
                     }
 
+                bool mouseClick = false;
                 bool keyPressed = false;
                 while (accumulator >= updateRate)
                     {
+                        OPTICK_EVENT("fixed timestep", Optick::Category::GameLogic);
                         accumulator -= updateRate;
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_W))
@@ -181,6 +185,11 @@ int main()
                                 cameraDir = glm::rotate(cameraDir, -glm::radians(rotationSpeed * (float)updateRate), glm::vec3(0.f, -1.f, 0.f));
                                 keyPressed = true;
                             }
+
+                        if (glfwGetMouseButton(app.getUnderlyingWindow(), GLFW_MOUSE_BUTTON_1))
+                            {
+                                mouseClick = true;
+                            }
                     }
                 
                 if (keyPressed)
@@ -188,6 +197,13 @@ int main()
                         camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0, -1.f, 0));
                         mvpUBO.bind(camera);
                     }
+
+                if (mouseClick)
+                    {
+                        glm::ivec3 position = space.raycast(cameraPos, cameraDir);
+                        space.setAt(position, voxelType::TEST_1);
+                    }
+
                 renderer.draw(*voxelSpaceDescriptor, space);
 
                 renderer.preRecording();

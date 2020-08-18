@@ -11,8 +11,11 @@
 #include "voxel/voxelSpace.hpp"
 #include <memory>
 
+#include "optick.h"
+
 void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
     {
+        OPTICK_EVENT("Record Submission Command Buffer", Optick::Category::Rendering);
         vkResetCommandBuffer(submissionBuffer, 0);
 
         VkCommandBufferBeginInfo beginInfo{};
@@ -152,6 +155,18 @@ renderer::renderer(window &app, descriptorSettings &settings)
                 m_renderFinishedSemaphores[i].create(m_device);
                 m_inFlightFences[i].create(m_device, VK_FENCE_CREATE_SIGNALED_BIT);
             }
+
+        VkQueue queueArray[] = {
+            m_graphicsQueue,
+            m_presentQueue
+        };
+
+        uint32_t queueFamiliesArray[] = {
+            queueFamilies.m_graphicsFamily.value(),
+            queueFamilies.m_presentFamily.value()
+        };
+
+        OPTICK_GPU_INIT_VULKAN(&m_device.getUnderlyingDevice(), &m_physicalDevice.getUnderlyingPhysicalDevice(), queueArray, queueFamiliesArray, 1);
     }
 
 renderer::~renderer()
@@ -266,12 +281,14 @@ void renderer::cleanup()
 
 void renderer::draw(descriptorSet &descriptorSet, voxelSpace &voxelSpace)
     {
+        OPTICK_EVENT("Draw", Optick::Category::Rendering);
         m_renderables.push_back({ &descriptorSet, voxelSpace });
     }
 
 void renderer::preRecording()
     {
-        std::unique_ptr<vulkanCommandBuffer> updateCommandBuffer;
+        vulkanCommandBuffer updateCommandBuffer;
+        bool hasUpdate = false;
 
         for (auto &renderable : m_renderables)
             {
@@ -279,15 +296,16 @@ void renderer::preRecording()
                     {
                         if (!updateCommandBuffer)
                             {
-                                updateCommandBuffer = std::make_unique<vulkanCommandBuffer>(m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+                                updateCommandBuffer.create(m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
                                 VkCommandBufferBeginInfo info{};
                                 info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
                                 info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-                                vkBeginCommandBuffer(updateCommandBuffer->getUnderlyingCommandBuffer(), &info);
+                                vkBeginCommandBuffer(updateCommandBuffer, &info);
                             }
 
-                        renderable.m_voxelSpace.updateBuffers(*updateCommandBuffer.get());
+                        renderable.m_voxelSpace.updateBuffers(updateCommandBuffer);
+                        hasUpdate = true;
                     }
 
                 if (renderable.m_descriptorSet->needsUpdate())
@@ -296,14 +314,14 @@ void renderer::preRecording()
                     }
             }
 
-        if (updateCommandBuffer)
+        if (hasUpdate)
             {
-                vkEndCommandBuffer(updateCommandBuffer->getUnderlyingCommandBuffer());
+                vkEndCommandBuffer(updateCommandBuffer);
 
                 VkSubmitInfo submitInfo{};
                 submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
                 submitInfo.commandBufferCount = 1;
-                submitInfo.pCommandBuffers = &updateCommandBuffer->getUnderlyingCommandBuffer();
+                submitInfo.pCommandBuffers = &updateCommandBuffer.getUnderlyingCommandBuffer();
 
                 vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
                 vkQueueWaitIdle(m_graphicsQueue);
@@ -337,7 +355,6 @@ void renderer::recordCommandBuffer()
 
         VkCommandBuffer currentCommandBuffer = m_commandBuffers[m_frame];
         vkResetCommandBuffer(currentCommandBuffer, 0);
-
         if (vkBeginCommandBuffer(currentCommandBuffer, &beginInfo) != VK_SUCCESS)
             {
                 // <error>
@@ -374,6 +391,7 @@ void renderer::recordCommandBuffer()
 
 void renderer::display()
     {
+        OPTICK_EVENT("Display", Optick::Category::Rendering);
         m_inFlightFences[m_frame].wait();
 
         uint32_t imageIndex;
@@ -442,7 +460,11 @@ void renderer::display()
         presentInfo.pImageIndices = &imageIndex;
         presentInfo.pResults = nullptr;
 
-        result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+        {
+            OPTICK_GPU_FLIP(m_swapChain);
+            OPTICK_CATEGORY("Present", Optick::Category::Wait);
+            result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
+        }
 
         if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
             {
