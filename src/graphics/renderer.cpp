@@ -287,15 +287,19 @@ void renderer::draw(descriptorSet &descriptorSet, voxelSpace &voxelSpace)
 
 void renderer::preRecording()
     {
+        OPTICK_EVENT("Pre-Record", Optick::Category::Rendering);
+        m_inFlightFences[m_frame].wait();
         vulkanCommandBuffer updateCommandBuffer;
         bool hasUpdate = false;
 
         for (auto &renderable : m_renderables)
             {
+                OPTICK_EVENT("Update Renderable");
                 if (renderable.m_voxelSpace.needsUpdate())
                     {
                         if (!updateCommandBuffer)
                             {
+                                OPTICK_EVENT("Create Update Buffer");
                                 updateCommandBuffer.create(m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 
                                 VkCommandBufferBeginInfo info{};
@@ -316,6 +320,7 @@ void renderer::preRecording()
 
         if (hasUpdate)
             {
+                OPTICK_EVENT("Finish Buffer Recording");
                 vkEndCommandBuffer(updateCommandBuffer);
 
                 VkSubmitInfo submitInfo{};
@@ -323,12 +328,14 @@ void renderer::preRecording()
                 submitInfo.commandBufferCount = 1;
                 submitInfo.pCommandBuffers = &updateCommandBuffer.getUnderlyingCommandBuffer();
 
-                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-                vkQueueWaitIdle(m_graphicsQueue);
+                OPTICK_EVENT("Submit Queue");
+                vkResetFences(m_device, 1, &m_inFlightFences[m_frame].getUnderlyingFence());
+                vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_frame]);
             }
 
         if (m_imGuiEnabled)
             {
+                OPTICK_EVENT("ImGui Render");
                 ImGui::Render();
                 m_imGuiDrawData = ImGui::GetDrawData();
             }
@@ -336,6 +343,7 @@ void renderer::preRecording()
 
 void renderer::recordCommandBuffer()
     {
+        OPTICK_EVENT("Record", Optick::Category::Rendering);
         VkCommandBufferInheritanceInfo inheritanceInfo{};
         inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
         inheritanceInfo.pNext = nullptr;
@@ -350,8 +358,6 @@ void renderer::recordCommandBuffer()
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         beginInfo.pInheritanceInfo = &inheritanceInfo;
-
-        m_inFlightFences[m_frame].wait();
 
         VkCommandBuffer currentCommandBuffer = m_commandBuffers[m_frame];
         vkResetCommandBuffer(currentCommandBuffer, 0);
@@ -481,6 +487,7 @@ void renderer::display()
 
 void renderer::waitForDeviceIdle()
     {
+        OPTICK_EVENT("Wait For Device", Optick::Category::Wait);
         if (m_device != VK_NULL_HANDLE)
             {
                 vkDeviceWaitIdle(m_device);

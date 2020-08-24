@@ -24,6 +24,10 @@ class voxelSpace
                     std::vector<quad> m_quads;
                     std::vector<vertex> m_vertices;
                     std::vector<fe::index> m_indices;
+                    void *m_vertexStagingBuffer = nullptr;
+                    void *m_indexStagingBuffer = nullptr;
+                    std::size_t m_vertexCount = 0;
+                    std::size_t m_indexCount = 0;
                 };
 
             struct chunkData
@@ -69,6 +73,7 @@ class voxelSpace
             friend void buildChunkMesh(chunkData &chunkData);
             friend unsigned int buildGeometry(glm::vec3 offset, chunkVoxelData &voxelData, unsigned int indexOffset);
 
+            void updateChunkMemory(chunkData &chunk);
             void updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset, int &vertexOffset, int &indexOffset);
             void updateMemory();
 

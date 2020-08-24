@@ -15,26 +15,42 @@
 #include "task.hpp"
 #include <optick.h>
 
+void voxelSpace::updateChunkMemory(chunkData &chunk)
+    {
+        OPTICK_EVENT();
+        OPTICK_TAG("Preset Buffers | Voxel Data Count:", chunk.m_voxelData.size());
+        for (auto &voxelData : chunk.m_voxelData)
+            {
+                unsigned long long indexSize = voxelData.m_indexCount * sizeof(fe::index);
+                unsigned long long vertexSize = voxelData.m_vertexCount * sizeof(vertex);
+
+                std::memcpy(voxelData.m_indexStagingBuffer, voxelData.m_indices.data(), indexSize);
+                std::memcpy(voxelData.m_vertexStagingBuffer, voxelData.m_vertices.data(), vertexSize);
+            }
+        m_localBuffer.m_needUpdate = true;
+    }
+
 void voxelSpace::updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset, int &vertexOffset, int &indexOffset)
     {
         OPTICK_EVENT();
         fe::uInt8 *cpuStagingBuffer = static_cast<fe::uInt8*>(m_localBuffer.m_cpuStagingBuffer);
         for (auto &voxelData : chunk.m_voxelData)
             {
-                unsigned long long indexSize = voxelData.m_indices.size() * sizeof(fe::index);
-                unsigned long long vertexSize = voxelData.m_vertices.size() * sizeof(vertex);
+                unsigned long long indexSize = voxelData.m_indexCount * sizeof(fe::index);
+                unsigned long long vertexSize = voxelData.m_vertexCount * sizeof(vertex);
 
-                std::memcpy(cpuStagingBuffer + indexOffset, voxelData.m_indices.data(), indexSize);
-                std::memcpy(cpuStagingBuffer + vertexBufferOffset + vertexOffset, voxelData.m_vertices.data(), vertexSize);
+                voxelData.m_indexStagingBuffer = cpuStagingBuffer + indexOffset;
+                voxelData.m_vertexStagingBuffer = cpuStagingBuffer + vertexBufferOffset + vertexOffset;
 
                 indexOffset += indexSize;
                 vertexOffset += vertexSize;
             }
+
+        updateChunkMemory(chunk);
     }
 
 void voxelSpace::updateMemory()
     {
-        OPTICK_CATEGORY("VoxelMemory", Optick::Category::Rendering);
         OPTICK_EVENT();
         // over-allocate for worst case scenario so that we can have set memory block sizes.
         // ceil(n^3 / 2) will result in worst case voxel count. Multiply by 8 to get vertices. Multiply by 6*8 to get indices
@@ -46,7 +62,6 @@ void voxelSpace::updateMemory()
                 m_localBuffer.create(totalVertexCount, totalIndexCount);
             }
 
-        // for all chunks
         int vertexOffset = 0;
         int indexOffset = 0;
         for (auto &chunk : m_loadedChunks)
@@ -87,11 +102,9 @@ void voxelSpace::buildChunk(chunkData &chunk, unsigned int &totalIndexOffset)
         buildChunkMesh(chunk);
         for (auto &subChunk : chunk.m_voxelData)
             {
-                subChunk.m_indices.clear();
-                subChunk.m_vertices.clear();
                 totalIndexOffset = buildGeometry(glm::vec3{ chunk.m_positionX, chunk.m_positionY, chunk.m_positionZ }, subChunk, totalIndexOffset);
-                chunk.m_vertexCount += subChunk.m_vertices.size();
-                chunk.m_indexCount += subChunk.m_indices.size();
+                chunk.m_vertexCount += subChunk.m_vertexCount;
+                chunk.m_indexCount += subChunk.m_indexCount;
             }
     }
 
@@ -364,11 +377,12 @@ void voxelSpace::setAt(glm::vec3 position, voxelType type)
         glm::vec3 localPosition{};
         transformSpace(position, chunkPosition, localPosition);
         assert(m_loadedChunks.find(chunkPosition) != m_loadedChunks.end());
-        m_loadedChunks.at(chunkPosition).m_chunk.at(localPosition.x, localPosition.y, localPosition.z) = type;
+        chunkData &chunk = m_loadedChunks.at(chunkPosition);
+        chunk.m_chunk.at(localPosition.x, localPosition.y, localPosition.z) = type;
 
-        unsigned int offset = m_loadedChunks.at(chunkPosition).m_indexOffset;
-        buildChunk(m_loadedChunks.at(chunkPosition), offset);
-        updateMemory();
+        unsigned int offset = chunk.m_indexOffset;
+        buildChunk(chunk, offset);
+        updateChunkMemory(chunk);
     }
 
 void buildChunkMesh(voxelSpace::chunkData &chunkData)
@@ -443,6 +457,30 @@ unsigned int buildGeometry(glm::vec3 offset, voxelSpace::chunkVoxelData &voxelDa
             { 0.37f, 0.50f, 0.22f }
         };
 
+        {
+            OPTICK_EVENT("Resize Vertices/Indices");
+            std::size_t expectedNewVertexSize = voxelData.m_quads.size() * 4;
+            std::size_t expectedNewIndexSize = voxelData.m_quads.size() * 6;
+
+            if (voxelData.m_vertices.size() < expectedNewVertexSize)
+                {
+                    voxelData.m_vertices.resize(expectedNewVertexSize);
+                }
+
+            if (voxelData.m_indices.size() < expectedNewIndexSize)
+                {
+                    voxelData.m_indices.resize(expectedNewIndexSize);
+                }
+
+            voxelData.m_indexCount = expectedNewIndexSize;
+            voxelData.m_vertexCount = expectedNewVertexSize;
+        }
+
+        unsigned int vertexIndex = 0;
+        // index of the current polygon index. Confusing, I know...
+        unsigned int indexIndex = 0;
+
+        OPTICK_TAG("VoxelDataQuads", voxelData.m_quads.size());
         for (auto &quad : voxelData.m_quads)
             {
                 v0.m_colour = quad.m_colour * colours[std::abs(quad.m_orientation) - 1];
@@ -511,16 +549,37 @@ unsigned int buildGeometry(glm::vec3 offset, voxelSpace::chunkVoxelData &voxelDa
                 v1.m_position += offset;
                 v2.m_position += offset;
                 v3.m_position += offset;
-
-                voxelData.m_vertices.insert(voxelData.m_vertices.end(), vertexArr, vertexArr + 4);
-                if (quad.m_orientation < 0)
+                
+                {
+                    if (v0.m_colour.r == 0)
                     {
-                        voxelData.m_indices.insert(voxelData.m_indices.end(), indexArrNegative, indexArrNegative + 6);
+                        int i = 0;
                     }
-                else 
-                    {
-                        voxelData.m_indices.insert(voxelData.m_indices.end(), indexArrPositive, indexArrPositive + 6);
-                    }
+                    voxelData.m_vertices[vertexIndex + 0] = vertexArr[0];
+                    voxelData.m_vertices[vertexIndex + 1] = vertexArr[1];
+                    voxelData.m_vertices[vertexIndex + 2] = vertexArr[2];
+                    voxelData.m_vertices[vertexIndex + 3] = vertexArr[3];
+                    if (quad.m_orientation < 0)
+                        {
+                            voxelData.m_indices[indexIndex + 0] = indexArrNegative[0];
+                            voxelData.m_indices[indexIndex + 1] = indexArrNegative[1];
+                            voxelData.m_indices[indexIndex + 2] = indexArrNegative[2];
+                            voxelData.m_indices[indexIndex + 3] = indexArrNegative[3];
+                            voxelData.m_indices[indexIndex + 4] = indexArrNegative[4];
+                            voxelData.m_indices[indexIndex + 5] = indexArrNegative[5];
+                        }
+                    else 
+                        {
+                            voxelData.m_indices[indexIndex + 0] = indexArrPositive[0];
+                            voxelData.m_indices[indexIndex + 1] = indexArrPositive[1];
+                            voxelData.m_indices[indexIndex + 2] = indexArrPositive[2];
+                            voxelData.m_indices[indexIndex + 3] = indexArrPositive[3];
+                            voxelData.m_indices[indexIndex + 4] = indexArrPositive[4];
+                            voxelData.m_indices[indexIndex + 5] = indexArrPositive[5];
+                        }
+                    vertexIndex += 4;
+                    indexIndex += 6;
+                }
                 
                 indexArrPositive[0] += 4;
                 indexArrPositive[1] += 4;
@@ -537,7 +596,7 @@ unsigned int buildGeometry(glm::vec3 offset, voxelSpace::chunkVoxelData &voxelDa
                 indexArrNegative[5] += 4;
             }
 
-        return indexOffset + voxelData.m_vertices.size();
+        return indexOffset + voxelData.m_vertexCount;
     }
 
 void voxelSpace::localBuffer::create(unsigned int vertexCount, unsigned int indexCount)
