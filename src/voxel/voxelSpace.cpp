@@ -15,17 +15,24 @@
 #include "task.hpp"
 #include <optick.h>
 
+void voxelSpace::updateSubChunkMemory(chunkVoxelData &voxelData)
+    {
+        OPTICK_EVENT();
+        unsigned long long indexSize = voxelData.m_indexCount * sizeof(fe::index);
+        unsigned long long vertexSize = voxelData.m_vertexCount * sizeof(vertex);
+
+        std::memcpy(voxelData.m_indexStagingBuffer, voxelData.m_indices.data(), indexSize);
+        std::memcpy(voxelData.m_vertexStagingBuffer, voxelData.m_vertices.data(), vertexSize);
+        m_localBuffer.m_needUpdate = true;
+    }
+
 void voxelSpace::updateChunkMemory(chunkData &chunk)
     {
         OPTICK_EVENT();
         OPTICK_TAG("Preset Buffers | Voxel Data Count:", chunk.m_voxelData.size());
         for (auto &voxelData : chunk.m_voxelData)
             {
-                unsigned long long indexSize = voxelData.m_indexCount * sizeof(fe::index);
-                unsigned long long vertexSize = voxelData.m_vertexCount * sizeof(vertex);
-
-                std::memcpy(voxelData.m_indexStagingBuffer, voxelData.m_indices.data(), indexSize);
-                std::memcpy(voxelData.m_vertexStagingBuffer, voxelData.m_vertices.data(), vertexSize);
+                updateSubChunkMemory(voxelData);
             }
         m_localBuffer.m_needUpdate = true;
     }
@@ -380,9 +387,63 @@ void voxelSpace::setAt(glm::vec3 position, voxelType type)
         chunkData &chunk = m_loadedChunks.at(chunkPosition);
         chunk.m_chunk.at(localPosition.x, localPosition.y, localPosition.z) = type;
 
+        voxelChunk::sizeType subChunkCountX = static_cast<voxelChunk::sizeType>(std::ceil(static_cast<float>(chunk.m_sizeX) / c_chunkSubSize));
+        voxelChunk::sizeType subChunkCountY = static_cast<voxelChunk::sizeType>(std::ceil(static_cast<float>(chunk.m_sizeY) / c_chunkSubSize));
+        voxelChunk::sizeType subChunkCountZ = static_cast<voxelChunk::sizeType>(std::ceil(static_cast<float>(chunk.m_sizeZ) / c_chunkSubSize));
+
+        unsigned int subChunkX = localPosition.x / c_chunkSubSize;
+        unsigned int subChunkY = localPosition.y / c_chunkSubSize;
+        unsigned int subChunkZ = localPosition.z / c_chunkSubSize;
+        int index = subChunkX + subChunkCountX * (subChunkY + subChunkCountY * subChunkZ);
+        chunkVoxelData &subChunk = chunk.m_voxelData[index];
+
+        chunk.m_vertexCount -= subChunk.m_vertexCount;
+        chunk.m_indexCount -= subChunk.m_indexCount;
+
+        voxelChunk::sizeType x = subChunkX * chunk.m_subSize;
+        voxelChunk::sizeType y = subChunkY * chunk.m_subSize;
+        voxelChunk::sizeType z = subChunkZ * chunk.m_subSize;
+
         unsigned int offset = chunk.m_indexOffset;
-        buildChunk(chunk, offset);
-        updateChunkMemory(chunk);
+        for (int i = 0; i < index; i++)
+            {
+                offset += chunk.m_voxelData[i].m_vertexCount;
+            }
+
+        buildChunkMesh(chunk, subChunk, x, y, z);
+        buildGeometry({ chunk.m_positionX, chunk.m_positionY, chunk.m_positionZ }, subChunk, offset);
+
+        chunk.m_vertexCount += subChunk.m_vertexCount;
+        chunk.m_indexCount += subChunk.m_indexCount;
+        updateSubChunkMemory(subChunk);
+    }
+
+void buildChunkMesh(const voxelSpace::chunkData &chunkData, voxelSpace::chunkVoxelData &voxelData, voxelChunk::sizeType &x, voxelChunk::sizeType &y, voxelChunk::sizeType &z)
+    {
+        OPTICK_EVENT("buildChunkMesh - sub-chunk");
+        voxelData.m_quads.clear();
+        for (voxelChunk::sizeType yIncrement = 0; yIncrement < chunkData.m_subSize; yIncrement++)
+            {
+                for (voxelChunk::sizeType xIncrement = 0; xIncrement < chunkData.m_subSize; xIncrement++)
+                    {
+                        for (voxelChunk::sizeType zIncrement = 0; zIncrement < chunkData.m_subSize; zIncrement++)
+                            {
+                                chunkData.m_chunk.meshAtPosition(voxelData.m_quads, x + xIncrement, y + yIncrement, z + zIncrement);
+                            }
+                    }
+            }
+
+        x += chunkData.m_subSize;
+        if (x >= chunkData.m_sizeX)
+            {
+                x = 0;
+                y += chunkData.m_subSize;
+                if (y >= chunkData.m_sizeY)
+                    {
+                        y = 0;
+                        z += chunkData.m_subSize;
+                    }
+            }   
     }
 
 void buildChunkMesh(voxelSpace::chunkData &chunkData)
@@ -395,29 +456,7 @@ void buildChunkMesh(voxelSpace::chunkData &chunkData)
         OPTICK_TAG("VoxelSubSize", chunkData.m_subSize);
         for (auto &voxelData : chunkData.m_voxelData)
             {
-                voxelData.m_quads.clear();
-                for (voxelChunk::sizeType yIncrement = 0; yIncrement < chunkData.m_subSize; yIncrement++)
-                    {
-                        for (voxelChunk::sizeType xIncrement = 0; xIncrement < chunkData.m_subSize; xIncrement++)
-                            {
-                                for (voxelChunk::sizeType zIncrement = 0; zIncrement < chunkData.m_subSize; zIncrement++)
-                                    {
-                                        chunkData.m_chunk.meshAtPosition(voxelData.m_quads, x + xIncrement, y + yIncrement, z + zIncrement);
-                                    }
-                            }
-                    }
-
-                x += chunkData.m_subSize;
-                if (x >= chunkData.m_sizeX)
-                    {
-                        x = 0;
-                        y += chunkData.m_subSize;
-                        if (y >= chunkData.m_sizeY)
-                            {
-                                y = 0;
-                                z += chunkData.m_subSize;
-                            }
-                    }               
+                buildChunkMesh(chunkData, voxelData, x, y, z);
             }
     }
 
@@ -551,10 +590,6 @@ unsigned int buildGeometry(glm::vec3 offset, voxelSpace::chunkVoxelData &voxelDa
                 v3.m_position += offset;
                 
                 {
-                    if (v0.m_colour.r == 0)
-                    {
-                        int i = 0;
-                    }
                     voxelData.m_vertices[vertexIndex + 0] = vertexArr[0];
                     voxelData.m_vertices[vertexIndex + 1] = vertexArr[1];
                     voxelData.m_vertices[vertexIndex + 2] = vertexArr[2];

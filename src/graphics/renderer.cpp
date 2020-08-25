@@ -410,6 +410,7 @@ void renderer::display()
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
             {
                 // <error>
+                std::terminate();
                 return;
             }
 

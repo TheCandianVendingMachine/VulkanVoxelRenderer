@@ -69,10 +69,11 @@ class voxelSpace
 
             glm::mat4 m_translation;
             glm::quat m_quaternion;
-
+            friend void buildChunkMesh(const chunkData &chunkData, chunkVoxelData &voxelData, voxelChunk::sizeType &x, voxelChunk::sizeType &y, voxelChunk::sizeType &z);
             friend void buildChunkMesh(chunkData &chunkData);
             friend unsigned int buildGeometry(glm::vec3 offset, chunkVoxelData &voxelData, unsigned int indexOffset);
 
+            void updateSubChunkMemory(chunkVoxelData &chunk);
             void updateChunkMemory(chunkData &chunk);
             void updateChunkMemory(chunkData &chunk, void *stagingBuffer, unsigned long long vertexBufferOffset, int &vertexOffset, int &indexOffset);
             void updateMemory();

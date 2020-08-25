@@ -101,7 +101,7 @@ float voxelChunk::getVoxelSize() const
         return m_voxelSize;
     }
 
-void voxelChunk::mesh(std::vector<quad> &quads)
+void voxelChunk::mesh(std::vector<quad> &quads) const
     {
         OPTICK_EVENT();
         for (int y = 0; y < m_sizeY; y++)
@@ -116,7 +116,7 @@ void voxelChunk::mesh(std::vector<quad> &quads)
             }
     }
 
-void voxelChunk::meshAtPosition(std::vector<quad> &quads, voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z)
+void voxelChunk::meshAtPosition(std::vector<quad> &quads, voxelChunk::sizeType x, voxelChunk::sizeType y, voxelChunk::sizeType z) const
     {
         if (!withinBounds(x, y, z) || at(x, y, z) == voxelType::NONE) { return; }
         float posX = x * m_voxelSize;
