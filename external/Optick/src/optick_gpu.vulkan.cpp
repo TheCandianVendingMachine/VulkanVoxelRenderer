@@ -257,18 +257,6 @@ namespace Optick
 			QueryTimestamp(commandBuffer, &AddFrameTag().timestamp);
 			nextFrame.frameEvent = &event;
 
-			OPTICK_VK_CHECK(vkEndCommandBuffer(commandBuffer));
-			VkSubmitInfo submitInfo = {};
-			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			submitInfo.pNext = nullptr;
-			submitInfo.waitSemaphoreCount = 0;
-			submitInfo.pWaitSemaphores = nullptr;
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &commandBuffer;
-			submitInfo.signalSemaphoreCount = 0;
-			submitInfo.pSignalSemaphores = nullptr;
-			OPTICK_VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, fence));
-
 			uint32_t queryBegin = currentFrame.queryIndexStart;
 			uint32_t queryEnd = node.queryIndex;
 
@@ -297,6 +285,18 @@ namespace Optick
 
 			nextFrame.queryIndexStart = queryEnd;
 			nextFrame.queryIndexCount = 0;
+
+			OPTICK_VK_CHECK(vkEndCommandBuffer(commandBuffer));
+			VkSubmitInfo submitInfo = {};
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInfo.pNext = nullptr;
+			submitInfo.waitSemaphoreCount = 0;
+			submitInfo.pWaitSemaphores = nullptr;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &commandBuffer;
+			submitInfo.signalSemaphoreCount = 0;
+			submitInfo.pSignalSemaphores = nullptr;
+			OPTICK_VK_CHECK(vkQueueSubmit(queue, 1, &submitInfo, fence));
 		}
 
 		++frameNumber;
