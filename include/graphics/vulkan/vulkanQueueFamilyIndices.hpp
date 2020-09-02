@@ -8,7 +8,7 @@ struct vulkanQueueFamilyIndices
         std::optional<uint32_t> m_graphicsFamily;
         std::optional<uint32_t> m_presentFamily;
 
-        bool isComplete()
+        constexpr bool isComplete()
             {
                 return m_graphicsFamily.has_value() && m_presentFamily.has_value();
             }

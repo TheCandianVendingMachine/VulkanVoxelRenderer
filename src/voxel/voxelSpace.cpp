@@ -184,9 +184,9 @@ void voxelSpace::createWorld(taskGraph *graph)
         noiseSurface.SetFractalLacunarity(2.0);
         noiseSurface.SetFractalGain(0.4);
 
-        for (int x = 0; x < 5; x++)
+        for (int x = 0; x < 1; x++)
             {
-                for (int z = 0; z < 5; z++)
+                for (int z = 0; z < 1; z++)
                     {
                         createChunk(m_loadedChunks[glm::ivec3{ x, 0, z }], c_chunkSize.x, c_chunkSize.y, c_chunkSize.z, c_chunkSize.x * x, 0, c_chunkSize.z * z);
                     }

@@ -27,6 +27,7 @@ class descriptorSet
             void cleanup();
 
             void bindImage(const vulkanImageView &imageView, const vulkanSampler &imageSampler);
+            void bindImage(const vulkanImageView &imageView);
             void bindUBO(const vulkanBuffer &buffer, VkDeviceSize range);
             void update();
 

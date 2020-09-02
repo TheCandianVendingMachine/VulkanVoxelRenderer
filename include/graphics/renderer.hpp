@@ -26,6 +26,11 @@
 #include "graphics/descriptorSet.hpp"
 #include "graphics/descriptorHandler.hpp"
 
+#include "graphics/computePipeline.hpp"
+
+#include <thread>
+#include <queue>
+
 struct ImDrawData;
 class window;
 class descriptorSettings;
@@ -35,6 +40,31 @@ class renderer
         private:
             // todo: add a buffer for the command buffers so that each swapchain image owns the frame buffers
             static constexpr unsigned int c_maxFramesInFlight = 3;
+            struct commandBufferInternal
+                {
+                    vulkanCommandBuffer m_commandBuffer;
+                    bool m_compiled = false;
+                };
+
+            struct computePipelineInternal
+                {
+                    computePipeline m_computePipeline;
+                    commandBufferInternal m_commandBuffer;
+                    descriptorSet *m_boundDescriptorSet = nullptr;
+                    unsigned int m_groupX = 0;
+                    unsigned int m_groupY = 0;
+                    unsigned int m_groupZ = 0;
+                };
+
+            struct oneTimeCommandBuffer
+                {
+                    commandBufferInternal m_commandBuffer;
+                    bool m_created = false;
+                    bool m_executing = false;
+                    void create(const vulkanDevice &device, const vulkanCommandPool &commandPool);
+                    void destroy(VkQueue queue);
+                    void cleanup();
+                };
 
             vulkanAllocator m_allocator;
             vulkanInstance m_instance;
@@ -46,11 +76,16 @@ class renderer
             vulkanSwapChain m_swapChain;
             renderPass m_renderPass;
 
+            oneTimeCommandBuffer m_oneTimeBuffer;
+
+            std::vector<computePipelineInternal> m_computePipelines;
+            std::queue<unsigned int> m_queuedComputeDispatches;
+
             VkQueue m_graphicsQueue = VK_NULL_HANDLE;
             VkQueue m_presentQueue = VK_NULL_HANDLE;
 
             vulkanCommandPool m_commandPool;
-            std::vector<vulkanCommandBuffer> m_commandBuffers;
+            std::vector<commandBufferInternal> m_commandBuffers;
             std::vector<vulkanCommandBuffer> m_submissionCommandBuffers;
 
             std::vector<vulkanSemaphore> m_imageAvailableSemaphores;
@@ -58,6 +93,8 @@ class renderer
             std::vector<vulkanFence> m_inFlightFences;
             std::vector<VkFence> m_imagesInFlight;
             unsigned int m_frame = 0;
+
+            std::vector<std::thread> m_displayThreads;
 
             descriptorHandler m_imGuiDescriptors;
             ImDrawData *m_imGuiDrawData = nullptr;
@@ -82,6 +119,9 @@ class renderer
 
             void cleanup();
 
+            unsigned int createComputePipeline(descriptorSettings &settings, const char *shaderPath);
+            void dispatchCompute(unsigned int pipeline, descriptorSet *descriptorSet, unsigned int x, unsigned int y, unsigned int z);
+
             void draw(descriptorSet &descriptorSet, voxelSpace &voxelSpace);
 
             void preRecording();
@@ -95,6 +135,9 @@ class renderer
             const vulkanDevice &getDevice() const;
 
             descriptorSet *createDescriptorSet();
+            descriptorSet *createComputeDescriptorSet(unsigned int pipeline);
             glm::vec2 getSize() const;
+
+            void transitionImageLayout(const vulkanImage &image, VkImageLayout oldLayout, VkImageLayout newLayout);
 
     };

@@ -7,9 +7,6 @@ void descriptorHandler::create(vulkanDevice &device, unsigned int swapChainImage
         m_settings = std::move(settings);
         m_descriptorSetLayout.create(device, m_settings.getLayoutBindings());
 
-        std::vector<VkDescriptorPoolSize> poolSizes(1);
-        poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        poolSizes[0].descriptorCount = static_cast<uint32_t>(swapChainImageCount); // how many of this type to allocate
         m_descriptorPool.create(device, c_maxSets * swapChainImageCount, m_settings.getPoolSizes(swapChainImageCount));
 
         m_device = &device;

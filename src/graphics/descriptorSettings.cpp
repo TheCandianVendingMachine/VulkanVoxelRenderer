@@ -10,7 +10,7 @@ std::vector<VkDescriptorSetLayoutBinding> descriptorSettings::getLayoutBindings(
         std::vector<VkDescriptorSetLayoutBinding> layoutBindings(m_descriptorSettings.size());
         for (unsigned int i = 0; i < m_descriptorSettings.size(); i++)
             {
-                layoutBindings[i].binding = i;
+                layoutBindings[i].binding = m_descriptorSettings[i].m_bindingNumber;
                 layoutBindings[i].descriptorType = m_descriptorSettings[i].m_type;
                 layoutBindings[i].descriptorCount = m_descriptorSettings[i].m_descriptorCount;
                 layoutBindings[i].stageFlags = m_descriptorSettings[i].m_shaderStages;

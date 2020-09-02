@@ -42,8 +42,14 @@ void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
         renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
         renderPassInfo.pClearValues = clearValues.data();
 
+        while (!m_queuedComputeDispatches.empty())
+            {
+                vkCmdExecuteCommands(submissionBuffer, 1, &m_computePipelines[m_queuedComputeDispatches.front()].m_commandBuffer.m_commandBuffer.getUnderlyingCommandBuffer());
+                m_queuedComputeDispatches.pop();
+            }
+        
         vkCmdBeginRenderPass(submissionBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-        vkCmdExecuteCommands(submissionBuffer, 1, &m_commandBuffers[m_frame].getUnderlyingCommandBuffer());
+        vkCmdExecuteCommands(submissionBuffer, 1, &m_commandBuffers[m_frame].m_commandBuffer.getUnderlyingCommandBuffer());
         vkCmdEndRenderPass(submissionBuffer);
 
         if (vkEndCommandBuffer(submissionBuffer) != VK_SUCCESS)
@@ -136,7 +142,10 @@ renderer::renderer(window &app, descriptorSettings &settings)
         m_commandPool.create(m_device, queueFamilies);
 
         m_commandBuffers.resize(m_swapChain.getImageViews().size());
-        vulkanCommandBufferFunctions::createBatch(m_commandBuffers, m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+        for (auto &commandBuffer : m_commandBuffers)
+            {
+                commandBuffer.m_commandBuffer.create(m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+            }
 
         m_submissionCommandBuffers.resize(m_swapChain.getImageViews().size());
         vulkanCommandBufferFunctions::createBatch(m_submissionCommandBuffers, m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -157,16 +166,14 @@ renderer::renderer(window &app, descriptorSettings &settings)
             }
 
         VkQueue queueArray[] = {
-            m_graphicsQueue,
-            m_presentQueue
+            m_graphicsQueue
         };
 
         uint32_t queueFamiliesArray[] = {
-            queueFamilies.m_graphicsFamily.value(),
-            queueFamilies.m_presentFamily.value()
+            queueFamilies.m_graphicsFamily.value()
         };
 
-        OPTICK_GPU_INIT_VULKAN(&m_device.getUnderlyingDevice(), &m_physicalDevice.getUnderlyingPhysicalDevice(), queueArray, queueFamiliesArray, 1);
+        //OPTICK_GPU_INIT_VULKAN(&m_device.getUnderlyingDevice(), &m_physicalDevice.getUnderlyingPhysicalDevice(), queueArray, queueFamiliesArray, 1);
     }
 
 renderer::~renderer()
@@ -255,13 +262,21 @@ void renderer::cleanup()
                 m_imageAvailableSemaphores[i].cleanup();
             }
 
+        m_oneTimeBuffer.cleanup();
+
         for (auto &commandBuffer : m_submissionCommandBuffers)
             {
                 commandBuffer.cleanup();
             }
         for (auto &commandBuffer : m_commandBuffers)
             {
-                commandBuffer.cleanup();
+                commandBuffer.m_commandBuffer.cleanup();
+            }
+
+        for (auto &computePipeline : m_computePipelines)
+            {
+                computePipeline.m_computePipeline.cleanup();
+                computePipeline.m_commandBuffer.m_commandBuffer.cleanup();
             }
 
         m_commandPool.cleanup();
@@ -279,6 +294,74 @@ void renderer::cleanup()
         m_instance.cleanup();
     }
 
+unsigned int renderer::createComputePipeline(descriptorSettings &settings, const char *shaderPath)
+    {
+        shader computeShader;
+        computeShader.load(m_device, shaderPath);
+
+        VkPipelineShaderStageCreateInfo computeShaderInfo{};
+        computeShaderInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        computeShaderInfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        computeShaderInfo.module = computeShader.getShaderModule();
+        computeShaderInfo.pName = computeShader.getEntryPoint().c_str();
+
+        m_computePipelines.emplace_back();
+        m_computePipelines.back().m_computePipeline.create(m_device, m_swapChain.getImageViews().size(), settings, computeShaderInfo);
+        m_computePipelines.back().m_commandBuffer.m_commandBuffer.create(m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+
+        return m_computePipelines.size() - 1;
+    }
+
+void renderer::dispatchCompute(unsigned int pipelineIndex, descriptorSet *descriptorSet, unsigned int x, unsigned int y, unsigned int z)
+    {
+        if (descriptorSet->needsUpdate())
+            {
+                descriptorSet->update();
+            }
+
+        computePipelineInternal &pipeline = m_computePipelines[pipelineIndex];
+        if (!(pipeline.m_groupX == x && pipeline.m_groupY == y && pipeline.m_groupZ == z && pipeline.m_boundDescriptorSet == descriptorSet && pipeline.m_commandBuffer.m_compiled))
+            {
+                vulkanCommandBuffer commandBuffer = pipeline.m_commandBuffer.m_commandBuffer;
+                vkResetCommandBuffer(commandBuffer, 0);
+
+                VkCommandBufferInheritanceInfo inheritanceInfo{};
+                inheritanceInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+                inheritanceInfo.pNext = nullptr;
+                inheritanceInfo.renderPass = VK_NULL_HANDLE;
+                inheritanceInfo.subpass = VK_NULL_HANDLE;
+                inheritanceInfo.framebuffer = VK_NULL_HANDLE;
+                inheritanceInfo.occlusionQueryEnable = VK_FALSE;
+                inheritanceInfo.queryFlags = 0;
+                inheritanceInfo.pipelineStatistics = VK_NULL_HANDLE;
+
+                VkCommandBufferBeginInfo beginInfo{};
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                beginInfo.flags = VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
+                beginInfo.pInheritanceInfo = &inheritanceInfo;
+
+                if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS)
+                    {
+                        // <error>
+                        return;
+                    }
+
+                vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_computePipeline.m_computePipeline);
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.m_computePipeline.m_pipelineLayout, 0, 1, &descriptorSet->getDescriptorSet(m_frame)->getUnderlyingDescriptorSet(), 0, nullptr);
+                vkCmdDispatch(commandBuffer, x, y, z);
+
+                vkEndCommandBuffer(commandBuffer);
+
+                pipeline.m_groupX = x;
+                pipeline.m_groupY = y;
+                pipeline.m_groupZ = z;
+                pipeline.m_boundDescriptorSet = descriptorSet;
+                pipeline.m_commandBuffer.m_compiled = true;
+            }
+
+        m_queuedComputeDispatches.push(pipelineIndex);
+    }
+
 void renderer::draw(descriptorSet &descriptorSet, voxelSpace &voxelSpace)
     {
         OPTICK_EVENT("Draw", Optick::Category::Rendering);
@@ -288,7 +371,10 @@ void renderer::draw(descriptorSet &descriptorSet, voxelSpace &voxelSpace)
 void renderer::preRecording()
     {
         OPTICK_EVENT("Pre-Record", Optick::Category::Rendering);
-        m_inFlightFences[m_frame].wait();
+        {
+            OPTICK_EVENT("wait for fence");
+            m_inFlightFences[m_frame].wait();
+        }
         vulkanCommandBuffer updateCommandBuffer;
         bool hasUpdate = false;
 
@@ -356,10 +442,10 @@ void renderer::recordCommandBuffer()
 
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT | VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
         beginInfo.pInheritanceInfo = &inheritanceInfo;
 
-        VkCommandBuffer currentCommandBuffer = m_commandBuffers[m_frame];
+        VkCommandBuffer currentCommandBuffer = m_commandBuffers[m_frame].m_commandBuffer;
         vkResetCommandBuffer(currentCommandBuffer, 0);
         if (vkBeginCommandBuffer(currentCommandBuffer, &beginInfo) != VK_SUCCESS)
             {
@@ -398,7 +484,10 @@ void renderer::recordCommandBuffer()
 void renderer::display()
     {
         OPTICK_EVENT("Display", Optick::Category::Rendering);
-        m_inFlightFences[m_frame].wait();
+        {
+            OPTICK_EVENT("wait for in-flight fence");
+            m_inFlightFences[m_frame].wait();
+        }
 
         uint32_t imageIndex;
         VkResult result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_frame], VK_NULL_HANDLE, &imageIndex);
@@ -410,12 +499,12 @@ void renderer::display()
         else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
             {
                 // <error>
-                std::terminate();
                 return;
             }
 
         if (m_imagesInFlight[imageIndex] != VK_NULL_HANDLE)
             {
+                OPTICK_EVENT("wait for image fence");
                 vkWaitForFences(m_device, 1, &m_imagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
             }
         m_imagesInFlight[imageIndex] = m_inFlightFences[m_frame];
@@ -447,12 +536,15 @@ void renderer::display()
         submitInfo.signalSemaphoreCount = 1;
         submitInfo.pSignalSemaphores = signalSemaphores;
 
-        vkResetFences(m_device, 1, &m_inFlightFences[m_frame].getUnderlyingFence());
-        if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_frame]) != VK_SUCCESS)
-            {
-                // <error>
-                return;
-            }
+        {
+            OPTICK_EVENT("Submit Graphics Queue");
+            vkResetFences(m_device, 1, &m_inFlightFences[m_frame].getUnderlyingFence());
+            if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_frame]) != VK_SUCCESS)
+                {
+                    // <error>
+                    return;
+                }
+        }
 
         VkPresentInfoKHR presentInfo{};
         presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -468,7 +560,6 @@ void renderer::display()
         presentInfo.pResults = nullptr;
 
         {
-            OPTICK_GPU_FLIP(m_swapChain);
             OPTICK_CATEGORY("Present", Optick::Category::Wait);
             result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
         }
@@ -510,8 +601,124 @@ descriptorSet *renderer::createDescriptorSet()
         return m_surface.m_descriptorHandler.createDescriptorSet();
     }
 
+descriptorSet *renderer::createComputeDescriptorSet(unsigned int pipeline)
+    {
+        return m_computePipelines[pipeline].m_computePipeline.m_descriptorHandler.createDescriptorSet();
+    }
+
 glm::vec2 renderer::getSize() const
     {
         return { m_swapChain.getExtent().width, m_swapChain.getExtent().height };
     }
 
+void renderer::transitionImageLayout(const vulkanImage &image, VkImageLayout oldLayout, VkImageLayout newLayout)
+    {
+        m_oneTimeBuffer.create(m_device, m_commandPool);
+
+        VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = oldLayout;
+        barrier.newLayout = newLayout;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.image = image;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel = 0;
+        barrier.subresourceRange.levelCount = image.mipLevels;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+
+        VkPipelineStageFlags sourceStage;
+        VkPipelineStageFlags destinationStage;
+
+        if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+            {
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+                sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            }
+        else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+            {
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                            
+                sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+                destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            }
+        else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_GENERAL)
+            {
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                            
+                sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+                destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+            }
+        else
+            {
+                // <error>
+                return;
+            }
+
+        vkCmdPipelineBarrier(
+            m_oneTimeBuffer.m_commandBuffer.m_commandBuffer,
+            sourceStage, destinationStage,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier
+        );
+
+        m_oneTimeBuffer.destroy(m_graphicsQueue);
+
+    }
+
+void renderer::oneTimeCommandBuffer::create(const vulkanDevice &device, const vulkanCommandPool &commandPool)
+    {
+        if (!m_created)
+            {
+                while (m_executing) {}
+                m_commandBuffer.m_commandBuffer.create(device, commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+
+                VkCommandBufferBeginInfo beginInfo{};
+                beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+                beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+                vkBeginCommandBuffer(m_commandBuffer.m_commandBuffer, &beginInfo);
+
+                m_created = true;
+            }
+    }
+
+void renderer::oneTimeCommandBuffer::destroy(VkQueue queue)
+    {
+        if (m_created)
+            {
+                m_executing = true;
+
+                //std::thread endThread([this, queue](){
+                    vkEndCommandBuffer(m_commandBuffer.m_commandBuffer);
+
+                    VkSubmitInfo submitInfo{};
+                    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+                    submitInfo.commandBufferCount = 1;
+                    submitInfo.pCommandBuffers = &m_commandBuffer.m_commandBuffer.getUnderlyingCommandBuffer();
+
+                    vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+                    vkQueueWaitIdle(queue);
+
+                    m_commandBuffer.m_commandBuffer.cleanup();
+                    m_executing = false;
+                //});
+                //endThread.detach();
+
+                m_created = false;
+            }
+    }
+
+void renderer::oneTimeCommandBuffer::cleanup()
+    {
+        m_commandBuffer.m_commandBuffer.cleanup();
+        m_created = false;
+        m_executing = false;
+    }

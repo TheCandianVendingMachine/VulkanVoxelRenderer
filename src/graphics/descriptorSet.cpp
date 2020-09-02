@@ -32,6 +32,14 @@ void descriptorSet::bindImage(const vulkanImageView &imageView, const vulkanSamp
         m_needsUpdate = true;
     }
 
+void descriptorSet::bindImage(const vulkanImageView &imageView)
+    {
+        m_imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        m_imageInfo.imageView = imageView;
+
+        m_needsUpdate = true;
+    }
+
 void descriptorSet::bindUBO(const vulkanBuffer &buffer, VkDeviceSize range)
     {
         VkDescriptorBufferInfo newInfo{};
@@ -62,7 +70,11 @@ void descriptorSet::update()
                                 case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
                                     write.pBufferInfo = &m_bufferInfo[bufferIndex++];
                                     break;
+                                case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+                                    m_imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+                                    [[fallthrough]];
                                 case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+                                case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
                                     write.pImageInfo = &m_imageInfo;
                                     break;
                                 default:

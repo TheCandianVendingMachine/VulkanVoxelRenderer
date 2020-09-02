@@ -1,7 +1,13 @@
 #include "graphics/vulkan/vulkanImage.hpp"
 #include "graphics/vulkan/vulkanAllocator.hpp"
 
-vulkanImage::vulkanImage(unsigned int width, unsigned int height, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage)
+vulkanImage::vulkanImage() :
+    mipLevels(m_mipLevels)
+    {
+    }
+
+vulkanImage::vulkanImage(unsigned int width, unsigned int height, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage) :
+    mipLevels(m_mipLevels)
     {
         create(width, height, mipLevels, numSamples, format, tiling, usage, memoryUsage);
     }
@@ -13,6 +19,12 @@ vulkanImage::~vulkanImage()
 
 void vulkanImage::create(unsigned int width, unsigned int height, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage)
     {
+        if (mipLevels <= 0)
+            {
+                // <error>
+                return;
+            }
+
         VkImageCreateInfo imageCreateInfo{};
         imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -28,7 +40,7 @@ void vulkanImage::create(unsigned int width, unsigned int height, int mipLevels,
         imageCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         imageCreateInfo.samples = numSamples;
         imageCreateInfo.flags = 0;
-
+        
         VmaAllocationCreateInfo imageAllocInfo{};
         imageAllocInfo.flags = 0;
         imageAllocInfo.usage = memoryUsage;
@@ -44,6 +56,7 @@ void vulkanImage::create(unsigned int width, unsigned int height, int mipLevels,
                 return;
             }
 
+        m_mipLevels = mipLevels;
         m_cleanedUp = false;
     }
 
