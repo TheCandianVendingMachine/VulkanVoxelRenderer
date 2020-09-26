@@ -29,6 +29,7 @@ class descriptorSet
             void bindImage(const vulkanImageView &imageView, const vulkanSampler &imageSampler);
             void bindImage(const vulkanImageView &imageView);
             void bindUBO(const vulkanBuffer &buffer, VkDeviceSize range);
+            void bindSBO(const vulkanBuffer &buffer, VkDeviceSize range);
             void update();
 
             bool needsUpdate() const;

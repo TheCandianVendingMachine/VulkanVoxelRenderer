@@ -53,6 +53,19 @@ void descriptorSet::bindUBO(const vulkanBuffer &buffer, VkDeviceSize range)
         m_needsUpdate = true;
     }
 
+void descriptorSet::bindSBO(const vulkanBuffer &buffer, VkDeviceSize range)
+    {
+        VkDescriptorBufferInfo newInfo{};
+
+        newInfo.buffer = buffer;
+        newInfo.offset = 0;
+        newInfo.range = range;
+
+        m_bufferInfo.push_back(newInfo);
+        
+        m_needsUpdate = true;
+    }
+
 void descriptorSet::update()
     {
         // to add more descriptor sets you have to add them in descriptorHandler too
@@ -67,6 +80,7 @@ void descriptorSet::update()
                         write.dstSet = descriptorSet;
                         switch (write.descriptorType)
                             {
+                                case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
                                 case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
                                     write.pBufferInfo = &m_bufferInfo[bufferIndex++];
                                     break;
