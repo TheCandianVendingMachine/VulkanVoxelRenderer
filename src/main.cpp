@@ -19,8 +19,12 @@
 
 #include "voxel/voxelSpace.hpp"
 
+#include "graphics/vulkan/vulkanSampler.hpp"
+
 #include "imgui.h"
 #include <optick.h>
+
+#include <glm/gtx/quaternion.hpp>
 
 struct mvp
     {
@@ -31,8 +35,8 @@ struct mvp
 
 struct cameraUBO
     {
-        glm::vec3 &m_origin;
-        glm::vec3 &m_direction;
+        glm::mat4 m_cameraToWorld;
+        glm::mat4 m_inverseProjection;
     };
 
 int main()
@@ -50,19 +54,19 @@ int main()
         window app(1280, 720, "Voxels!!");
 
         descriptorSettings settings;
-        settings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_VERTEX_BIT, 1);
+        settings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT, 1);
         
         renderer renderer(app, settings);
         renderer.initImGui(app);
 
-        glm::vec3 cameraPos = { -23, -22, -2 };
-        glm::vec3 cameraDir = glm::rotate(glm::vec3(1.f, 0.f, 0.f), glm::radians(45.f), glm::vec3(0.f, -1.f, 0.f));
-        cameraDir = glm::rotate(cameraDir, glm::radians(45.f), glm::vec3(0.f, 0.f, 1.f));
+        glm::vec3 cameraPos = { 0, 5.f, 5.f };
+        glm::vec3 cameraDir = glm::rotate(glm::vec3(1.f, 0.f, 0.f), glm::radians(0.f), glm::vec3(0.f, -1.f, 0.f));
+        cameraDir = glm::rotate(cameraDir, glm::radians(0.f), glm::vec3(0.f, 0.f, 1.f));
         float m_cameraRotation = 0.f;
 
         mvp camera;
         camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0.f, -1.f, 0.f));
-        camera.m_projection = glm::perspective(glm::radians(60.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, static_cast<float>(1 << 16));
+        camera.m_projection = glm::perspective(glm::radians(100.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, static_cast<float>(1 << 16));
         camera.m_projection[1][1] *= -1;
 
         constexpr float speed = 16.f;
@@ -73,23 +77,26 @@ int main()
         space.createWorld(&taskGraph);
         camera.m_model = space.getModelTransformation();
 
-        uniformBuffer mvpUBO(camera);
-        descriptorSet *voxelSpaceDescriptor = renderer.createDescriptorSet();
-        voxelSpaceDescriptor->bindUBO(mvpUBO.getUniformBuffer(), mvpUBO.getBufferSize());
-
         descriptorSettings computeSettings;
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1);
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1);
 
         renderer.createComputePipeline(computeSettings, "shaders/raytracing.spv");
 
-        cameraUBO cameraUBO{cameraPos, cameraDir};
+        glm::mat4 translation = glm::translate(glm::mat4(1.f), cameraPos);
+        glm::quat quat = glm::angleAxis(glm::radians(-30.f), glm::normalize(glm::vec3{ 1.f, 0.f, 0.f }));
+
+        cameraUBO cameraUBO;
+        cameraUBO.m_cameraToWorld = translation * glm::toMat4(quat);
+        cameraUBO.m_inverseProjection = glm::inverse(camera.m_projection);
+
         uniformBuffer viewUBO(cameraUBO);
 
         alignas(16) vulkanImage renderImage;
         vulkanImageView renderImageView;
 
-        renderImage.create(256, 256, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+        glm::ivec2 imageSize{2560, 1440};
+        renderImage.create(imageSize.x, imageSize.y, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
         renderImageView.create(renderer.getDevice(), renderImage, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1);
         
         renderer.transitionImageLayout(renderImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
@@ -98,6 +105,15 @@ int main()
         computeDescriptor->bindImage(renderImageView);
         computeDescriptor->bindUBO(viewUBO.getUniformBuffer(), viewUBO.getBufferSize());
         
+        vulkanImage finalImage(imageSize.x, imageSize.y, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
+        vulkanImageView finalImageView(renderer.getDevice(), finalImage, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+        vulkanSampler finalImageSampler(renderer.getDevice(), finalImage.mipLevels);
+
+        renderer.transitionImageLayout(finalImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        descriptorSet *voxelSpaceDescriptor = renderer.createDescriptorSet();
+        voxelSpaceDescriptor->bindImage(finalImageView, finalImageSampler);
+
         fe::clock frameClock;
         fe::clock programClock;
         std::array<int64_t, 1000> frameTimes;
@@ -150,6 +166,7 @@ int main()
                 int button = 0;
                 bool keyPressed = false;
                 while (accumulator >= updateRate)
+
                     {
                         OPTICK_EVENT("fixed timestep", Optick::Category::GameLogic);
                         accumulator -= updateRate;
@@ -228,11 +245,16 @@ int main()
                 
                 if (keyPressed)
                     {
-                        camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0, -1.f, 0));
-                        mvpUBO.bind(camera);
+                        //camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0, -1.f, 0));
+                        //mvpUBO.bind(camera);
+                        translation = glm::translate(glm::mat4(1.f), cameraPos);
+                        cameraUBO.m_cameraToWorld = translation * glm::toMat4(quat);
+                        cameraUBO.m_inverseProjection = glm::inverse(camera.m_projection);
+
+                        viewUBO.bind(cameraUBO);
                     }
 
-                renderer.dispatchCompute(0, computeDescriptor, 8, 8, 1);
+                renderer.dispatchCompute(0, computeDescriptor, imageSize.x / 8, imageSize.y / 8, 1);
 
                 if (mouseClick)
                     {
@@ -248,13 +270,15 @@ int main()
                             }
                     }
 
-                //renderer.draw(*voxelSpaceDescriptor, space);
+                renderer.blitImage(renderImage, VK_IMAGE_LAYOUT_GENERAL, finalImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, imageSize.x, imageSize.y);
+
+                renderer.draw(*voxelSpaceDescriptor);
 
                 renderer.preRecording();
                 renderer.recordCommandBuffer();
                 taskGraph.execute();
 
-                renderer.display();
+                renderer.display();//break;
             }
 
         renderer.waitForDeviceIdle();
@@ -265,11 +289,15 @@ int main()
 
         viewUBO.destroy();
 
+        finalImage.cleanup();
+        finalImageSampler.cleanup();
+        finalImageView.cleanup();
+
         renderImage.cleanup();
         renderImageView.cleanup();
 
         space.destroy();
-        mvpUBO.destroy();
+        //mvpUBO.destroy();
 
         renderer.cleanup();
         app.cleanup();

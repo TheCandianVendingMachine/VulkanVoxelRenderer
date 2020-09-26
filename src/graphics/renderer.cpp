@@ -90,8 +90,8 @@ renderer::renderer(window &app, descriptorSettings &settings)
         shader frag;
         shader vert;
 
-        frag.load(m_device, "shaders/frag.spv");
-        vert.load(m_device, "shaders/vert.spv");
+        frag.load(m_device, "shaders/raytracing_fragment.spv");
+        vert.load(m_device, "shaders/raytracing_vertex.spv");
 
         m_surface.create(m_device, m_swapChain, m_renderPass.getRenderPass(), settings, 
             [this, &frag, &vert](std::vector<VkPipelineShaderStageCreateInfo> &shaderStages, VkPipelineVertexInputStateCreateInfo &vertexInputInfo, VkPipelineInputAssemblyStateCreateInfo &inputAssembly, VkPipelineTessellationStateCreateInfo&, VkPipelineMultisampleStateCreateInfo &multisampling, VkPipelineDepthStencilStateCreateInfo &depthStencil, VkPipelineDynamicStateCreateInfo&){
@@ -112,10 +112,10 @@ renderer::renderer(window &app, descriptorSettings &settings)
 
                 static auto bindingDescription = vertex::getBindingDescription();
                 static auto attributeDescriptions = vertex::getAttributeDescription();
-                vertexInputInfo.vertexBindingDescriptionCount = 1;
-                vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-                vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-                vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
+                vertexInputInfo.vertexBindingDescriptionCount = 0;
+                vertexInputInfo.pVertexBindingDescriptions = nullptr;
+                vertexInputInfo.vertexAttributeDescriptionCount = 0;
+                vertexInputInfo.pVertexAttributeDescriptions = nullptr;
 
                 inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
                 inputAssembly.primitiveRestartEnable = VK_FALSE;
@@ -362,10 +362,10 @@ void renderer::dispatchCompute(unsigned int pipelineIndex, descriptorSet *descri
         m_queuedComputeDispatches.push(pipelineIndex);
     }
 
-void renderer::draw(descriptorSet &descriptorSet, voxelSpace &voxelSpace)
+void renderer::draw(descriptorSet &descriptorSet)
     {
         OPTICK_EVENT("Draw", Optick::Category::Rendering);
-        m_renderables.push_back({ &descriptorSet, voxelSpace });
+        m_renderables.push_back({ &descriptorSet});
     }
 
 void renderer::preRecording()
@@ -381,23 +381,6 @@ void renderer::preRecording()
         for (auto &renderable : m_renderables)
             {
                 OPTICK_EVENT("Update Renderable");
-                if (renderable.m_voxelSpace.needsUpdate())
-                    {
-                        if (!updateCommandBuffer)
-                            {
-                                OPTICK_EVENT("Create Update Buffer");
-                                updateCommandBuffer.create(m_device, m_commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-
-                                VkCommandBufferBeginInfo info{};
-                                info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-                                info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-                                vkBeginCommandBuffer(updateCommandBuffer, &info);
-                            }
-
-                        renderable.m_voxelSpace.updateBuffers(updateCommandBuffer);
-                        hasUpdate = true;
-                    }
-
                 if (renderable.m_descriptorSet->needsUpdate())
                     {
                         renderable.m_descriptorSet->update();
@@ -457,14 +440,11 @@ void renderer::recordCommandBuffer()
 
         for (auto &renderable : m_renderables)
             {
-                VkDeviceSize offsets[] = { renderable.m_voxelSpace.getVertexMemoryOffset() };
+                VkDeviceSize offsets[] = { 0 };
                 vulkanDescriptorSet *descriptorSet = renderable.m_descriptorSet->getDescriptorSet(m_frame);
 
-                vkCmdBindIndexBuffer(currentCommandBuffer, renderable.m_voxelSpace.getBufferMemory().getUnderlyingBuffer(), 0, VK_INDEX_TYPE_UINT32);
-                vkCmdBindVertexBuffers(currentCommandBuffer, 0, 1, &renderable.m_voxelSpace.getBufferMemory().getUnderlyingBuffer(), offsets);
-                
                 vkCmdBindDescriptorSets(currentCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_surface.m_pipelineLayout, 0, 1, &descriptorSet->getUnderlyingDescriptorSet(), 0, nullptr);
-                vkCmdDrawIndexed(currentCommandBuffer, renderable.m_voxelSpace.getIndexCount(), 1, 0, 0, 0);
+                vkCmdDraw(currentCommandBuffer, 3, 1, 0, 0);
             }
 
         if (m_imGuiEnabled)
@@ -672,6 +652,107 @@ void renderer::transitionImageLayout(const vulkanImage &image, VkImageLayout old
 
         m_oneTimeBuffer.destroy(m_graphicsQueue);
 
+    }
+
+void renderer::blitImage(vulkanImage &src, VkImageLayout srcLayout, vulkanImage &dst, VkImageLayout dstLayout, int width, int height)
+    {
+        m_oneTimeBuffer.create(m_device, m_commandPool);
+        vulkanCommandBuffer &commandBuffer = m_oneTimeBuffer.m_commandBuffer.m_commandBuffer;
+
+        VkImageMemoryBarrier barrierSrc{};
+        barrierSrc.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrierSrc.image = src;
+        barrierSrc.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrierSrc.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrierSrc.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrierSrc.subresourceRange.baseArrayLayer = 0;
+        barrierSrc.subresourceRange.layerCount = 1;
+        barrierSrc.subresourceRange.levelCount = 1;
+
+        VkImageMemoryBarrier barrierDst{};
+        barrierDst.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrierDst.image = dst;
+        barrierDst.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrierDst.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrierDst.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrierDst.subresourceRange.baseArrayLayer = 0;
+        barrierDst.subresourceRange.layerCount = 1;
+        barrierDst.subresourceRange.levelCount = 1;
+
+        barrierSrc.subresourceRange.baseMipLevel = 0;
+        barrierSrc.oldLayout = srcLayout;
+        barrierSrc.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrierSrc.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrierSrc.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+        barrierDst.subresourceRange.baseMipLevel = 0;
+        barrierDst.oldLayout = dstLayout;
+        barrierDst.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrierDst.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrierDst.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrierSrc
+        );
+
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrierDst
+        );
+
+        VkImageBlit blitProperties{};
+        blitProperties.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blitProperties.srcSubresource.baseArrayLayer = 0;
+        blitProperties.srcSubresource.mipLevel = 0;
+        blitProperties.srcSubresource.layerCount = 1;
+
+        blitProperties.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blitProperties.dstSubresource.baseArrayLayer = 0;
+        blitProperties.dstSubresource.mipLevel = 0;
+        blitProperties.dstSubresource.layerCount = 1;
+
+        blitProperties.srcOffsets[0] = { 0, 0, 0 };
+        blitProperties.srcOffsets[1] = { width, height, 1 };
+
+        blitProperties.dstOffsets[0] = { 0, 0, 0 };
+        blitProperties.dstOffsets[1] = { width, height, 1 };
+
+        vkCmdBlitImage(commandBuffer, src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitProperties, VK_FILTER_LINEAR);
+
+        barrierSrc.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrierSrc.newLayout = srcLayout;
+        barrierSrc.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrierSrc.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        barrierDst.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrierDst.newLayout = dstLayout;
+        barrierDst.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrierDst.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrierSrc
+        );
+
+        vkCmdPipelineBarrier(
+            commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrierDst
+        );
+
+        m_oneTimeBuffer.destroy(m_graphicsQueue);
     }
 
 void renderer::oneTimeCommandBuffer::create(const vulkanDevice &device, const vulkanCommandPool &commandPool)

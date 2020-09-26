@@ -103,7 +103,6 @@ class renderer
             struct renderable
                 {
                     descriptorSet *m_descriptorSet = nullptr;
-                    voxelSpace &m_voxelSpace;
                 };
             std::vector<renderable> m_renderables;
 
@@ -122,7 +121,7 @@ class renderer
             unsigned int createComputePipeline(descriptorSettings &settings, const char *shaderPath);
             void dispatchCompute(unsigned int pipeline, descriptorSet *descriptorSet, unsigned int x, unsigned int y, unsigned int z);
 
-            void draw(descriptorSet &descriptorSet, voxelSpace &voxelSpace);
+            void draw(descriptorSet &descriptorSet);
 
             void preRecording();
             void recordCommandBuffer();
@@ -139,5 +138,6 @@ class renderer
             glm::vec2 getSize() const;
 
             void transitionImageLayout(const vulkanImage &image, VkImageLayout oldLayout, VkImageLayout newLayout);
+            void blitImage(vulkanImage &src, VkImageLayout srcLayout, vulkanImage &dst, VkImageLayout dstLayout, int width, int height);
 
     };
