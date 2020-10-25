@@ -1,4 +1,6 @@
 #include "voxel/sparseVoxelOctree.hpp"
+#include "graphics/storageBuffer.hpp"
+#include <fstream>
 
 sparseVoxelOctree::cpuNode &sparseVoxelOctree::createNode()
     {
@@ -207,6 +209,7 @@ void sparseVoxelOctree::covertFromRGB24ToRGB16(char &r, char &g, char &b)
 
 void sparseVoxelOctree::addVoxel(double x, double y, double z, unsigned int depth, char r, char g, char b)
     {
+        m_cpuChanged = true;
         covertFromRGB24ToRGB16(r, g, b);
 
         unsigned int lastVoxel = 0;
@@ -259,6 +262,82 @@ void sparseVoxelOctree::addVoxel(double x, double y, double z, unsigned int dept
         m_cpuVoxels[lastVoxel].voxel.data.colour.r = r;
         m_cpuVoxels[lastVoxel].voxel.data.colour.g = g;
         m_cpuVoxels[lastVoxel].voxel.data.colour.b = b;
+    }
+
+void sparseVoxelOctree::save(const char *filepath)
+    {
+        fileMetaData data;
+        data.voxelCount = m_cpuVoxels.size();
+
+        std::ofstream out(filepath, std::ios::binary);
+        out.write(static_cast<const char*>(static_cast<void*>(&data)), sizeof(data));
+        out.write(static_cast<const char*>(static_cast<void*>(m_cpuVoxels.data())), m_cpuVoxels.size() * sizeof(cpuNode));
+        out.close();
+    }
+
+void sparseVoxelOctree::load(const char *filepath)
+    {
+        std::ifstream in(filepath, std::ios::ate | std::ios::binary);
+        if (!in.is_open())
+            {
+                // <error>
+                return;
+            }
+        std::streampos fileSize = in.tellg();
+        std::vector<char> buffer(static_cast<std::size_t>(fileSize));
+
+        fileMetaData data;
+
+        in.seekg(0);
+
+        constexpr std::uint64_t metaHeaderSize = sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint64_t);
+        char *dataPtr = reinterpret_cast<char*>(&data);
+        in.read(dataPtr, metaHeaderSize);
+        switch (data.version)
+            {
+                case 0:
+                    // <error>
+                    return;
+                    break;
+                case 1:
+                    in.read(dataPtr + metaHeaderSize, data.headerSize - metaHeaderSize);
+                    in.read(buffer.data(), fileSize);
+                    
+                    m_cpuVoxels.clear();
+                    m_cpuVoxels.resize(data.voxelCount);
+                    for (std::size_t i = 0; i < m_cpuVoxels.size(); i++)
+                        {
+                            m_cpuVoxels[i] = *reinterpret_cast<cpuNode*>(buffer.data() + (i * data.cpuNodeSize));
+                        }
+                    break;
+                default:
+                    // <error>
+                    return;
+                    break;
+            }
+        in.close();
+        m_cpuChanged = true;
+    }
+
+void sparseVoxelOctree::mapToStorageBuffer(storageBuffer &buffer)
+    {
+        if (m_cpuChanged)
+            {
+                m_gpuVoxels.clear();
+                m_gpuVoxels.resize(m_cpuVoxels.size());
+
+                unsigned int i = 0;
+                for (const auto &cpuNode : m_cpuVoxels)
+                    {
+                        m_gpuVoxels[i].index = m_cpuVoxels[i].index;
+                        m_gpuVoxels[i].nextSibling = m_cpuVoxels[i].nextSibling;
+                        m_gpuVoxels[i].firstChild = m_cpuVoxels[i].firstChild;
+                        m_gpuVoxels[i].voxel.entire = m_cpuVoxels[i].voxel.entire;
+                        i++;
+                    }
+                m_cpuChanged = false;
+            }
+        buffer.create(m_gpuVoxels.size(), c_gpuNodeSize, m_gpuVoxels.data());
     }
 
 sparseVoxelOctree::sparseVoxelOctree(unsigned int treeSize) :
