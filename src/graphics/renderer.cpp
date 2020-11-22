@@ -755,6 +755,23 @@ void renderer::blitImage(vulkanImage &src, VkImageLayout srcLayout, vulkanImage 
         m_oneTimeBuffer.destroy(m_graphicsQueue);
     }
 
+void renderer::copyBufferToImage(vulkanBuffer &source, vulkanImage &destination, VkImageLayout dstLayout, uint32_t regionCount, VkBufferImageCopy *copyRegions)
+    {
+        m_oneTimeBuffer.create(m_device, m_commandPool);
+        vulkanCommandBuffer &commandBuffer = m_oneTimeBuffer.m_commandBuffer.m_commandBuffer;
+
+        vkCmdCopyBufferToImage(
+            commandBuffer,
+            source,
+            destination,
+            dstLayout,
+            regionCount,
+            copyRegions
+        );
+
+        m_oneTimeBuffer.destroy(m_graphicsQueue);
+    }
+
 void renderer::oneTimeCommandBuffer::create(const vulkanDevice &device, const vulkanCommandPool &commandPool)
     {
         if (!m_created)

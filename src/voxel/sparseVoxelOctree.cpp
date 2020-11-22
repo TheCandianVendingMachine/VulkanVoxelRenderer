@@ -51,6 +51,7 @@ void sparseVoxelOctree::subdivide(cpuNode &node, unsigned char children, unsigne
                             bool occupied = static_cast<bool>(children & (1 << i));
                             if (occupied)
                                 {
+                                    m_cpuVoxels[nodeIndex].voxel.data.leaves |= (1 << i);
                                     newChildrenIndices[i] = createNode().index;
                                 }
                         }
@@ -100,8 +101,9 @@ void sparseVoxelOctree::subdivide(cpuNode &node, unsigned char children, unsigne
                         bool occupied = static_cast<bool>(children & (1 << i));
                         if (occupied)
                             {
-                                cpuNode &child = createNode();
-                                unsigned int index = child.index;
+                                m_cpuVoxels[nodeIndex].voxel.data.leaves |= (1 << i);
+
+                                unsigned int index = createNode().index;
 
                                 if (m_cpuVoxels[parentIndex].firstChild == 0)
                                     {
@@ -155,12 +157,12 @@ bool sparseVoxelOctree::exists(double x, double y, double z, unsigned int depth,
                 bool zLM = z > (minZ + (maxZ / 2.0));
 
                 childIn = childIn | (static_cast<unsigned char>(xLM) << 0);
-                childIn = childIn | (static_cast<unsigned char>(zLM) << 1);
-                childIn = childIn | (static_cast<unsigned char>(yLM) << 2);
+                childIn = childIn | (static_cast<unsigned char>(yLM) << 1);
+                childIn = childIn | (static_cast<unsigned char>(zLM) << 2);
 
                 if (childIn & 0b001) { minX += maxX / 2; } else { maxX /= 2; }
-                if (childIn & 0b010) { minZ += maxZ / 2; } else { maxZ /= 2; }
-                if (childIn & 0b100) { minY += maxY / 2; } else { maxY /= 2; }
+                if (childIn & 0b010) { minY += maxY / 2; } else { maxY /= 2; }
+                if (childIn & 0b100) { minZ += maxZ / 2; } else { maxZ /= 2; }
 
                 if (!(m_cpuVoxels[workingIndex].voxel.data.children & (1 << childIn)))
                     {
@@ -217,9 +219,9 @@ void sparseVoxelOctree::addVoxel(double x, double y, double z, unsigned int dept
         if (exists(x, y, z, depth, &lastVoxel, &lastDepth))
             {
                 // change voxel colour
-                m_cpuVoxels[lastVoxel].voxel.data.colour.r = r;
-                m_cpuVoxels[lastVoxel].voxel.data.colour.g = g;
-                m_cpuVoxels[lastVoxel].voxel.data.colour.b = b;
+                m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.r = r;
+                m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.g = g;
+                m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.b = b;
                 return;
             }
 
@@ -232,6 +234,9 @@ void sparseVoxelOctree::addVoxel(double x, double y, double z, unsigned int dept
         unsigned int maxY = m_treeSize;
         unsigned int maxZ = m_treeSize;
 
+        unsigned int parent = 0;
+        unsigned char lastChildIn = 0;
+
         for (int i = 0; i < depth; i++)
             {
                 unsigned char childIn = 0b000;
@@ -241,12 +246,12 @@ void sparseVoxelOctree::addVoxel(double x, double y, double z, unsigned int dept
                 bool zLM = z > (minZ + (maxZ / 2.0));
 
                 childIn = childIn | (static_cast<unsigned char>(xLM) << 0);
-                childIn = childIn | (static_cast<unsigned char>(zLM) << 1);
-                childIn = childIn | (static_cast<unsigned char>(yLM) << 2);
+                childIn = childIn | (static_cast<unsigned char>(yLM) << 1);
+                childIn = childIn | (static_cast<unsigned char>(zLM) << 2);
 
-                if (childIn & 0b001) { minX += maxX / 2.0; } else { maxX /= 2.0; }
-                if (childIn & 0b010) { minZ += maxZ / 2.0; } else { maxZ /= 2.0; }
-                if (childIn & 0b100) { minY += maxY / 2.0; } else { maxY /= 2.0; }
+                if (childIn & 0b001) { minX += maxX / 2; } else { maxX /= 2; }
+                if (childIn & 0b010) { minY += maxY / 2; } else { maxY /= 2; }
+                if (childIn & 0b100) { minZ += maxZ / 2; } else { maxZ /= 2; }
 
                 unsigned char children[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
                 unsigned char *childrenPointer = children;
@@ -255,13 +260,19 @@ void sparseVoxelOctree::addVoxel(double x, double y, double z, unsigned int dept
                     {
                         continue;
                     }
+                if (i != 0)
+                    {
+                        m_cpuVoxels[parent].voxel.data.leaves ^= (1 << lastChildIn);
+                    }
                 subdivide(m_cpuVoxels[lastVoxel], 0b0000'0000 | (1 << childIn), &childrenPointer);
+                parent = lastVoxel;
+                lastChildIn = childIn;
                 lastVoxel = children[childIn];
             }
 
-        m_cpuVoxels[lastVoxel].voxel.data.colour.r = r;
-        m_cpuVoxels[lastVoxel].voxel.data.colour.g = g;
-        m_cpuVoxels[lastVoxel].voxel.data.colour.b = b;
+        m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.r = r;
+        m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.g = g;
+        m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.b = b;
     }
 
 void sparseVoxelOctree::save(const char *filepath)
@@ -290,9 +301,8 @@ void sparseVoxelOctree::load(const char *filepath)
 
         in.seekg(0);
 
-        constexpr std::uint64_t metaHeaderSize = sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint64_t);
         char *dataPtr = reinterpret_cast<char*>(&data);
-        in.read(dataPtr, metaHeaderSize);
+        in.read(dataPtr, fileMetaData::c_headerMetadataSize);
         switch (data.version)
             {
                 case 0:
@@ -300,7 +310,7 @@ void sparseVoxelOctree::load(const char *filepath)
                     return;
                     break;
                 case 1:
-                    in.read(dataPtr + metaHeaderSize, data.headerSize - metaHeaderSize);
+                    in.read(dataPtr + fileMetaData::c_headerMetadataSize, data.headerSize - fileMetaData::c_headerMetadataSize);
                     in.read(buffer.data(), fileSize);
                     
                     m_cpuVoxels.clear();
@@ -337,7 +347,12 @@ void sparseVoxelOctree::mapToStorageBuffer(storageBuffer &buffer)
                     }
                 m_cpuChanged = false;
             }
-        buffer.create(m_gpuVoxels.size(), c_gpuNodeSize, m_gpuVoxels.data());
+        if (buffer.getBufferSize() <= 0)
+            {
+                buffer.create(m_gpuVoxels.size(), c_gpuNodeSize);
+            }
+
+        buffer.bind(m_gpuVoxels.data());
     }
 
 sparseVoxelOctree::sparseVoxelOctree(unsigned int treeSize) :

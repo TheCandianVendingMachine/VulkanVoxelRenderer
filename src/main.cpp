@@ -29,6 +29,11 @@
 
 #include <glm/gtx/quaternion.hpp>
 
+#include "voxel/sparseVoxelOctree.hpp"
+#include "voxel/voxelGrid.hpp"
+
+#include <stb_image.h>
+
 struct mvp
     {
         alignas(16) glm::mat4 m_model;
@@ -38,23 +43,66 @@ struct mvp
 
 struct cameraUBO
     {
-        glm::mat4 m_cameraToWorld;
-        glm::mat4 m_inverseProjection;
+        alignas(16) glm::mat4 m_cameraToWorld;
+        alignas(16) glm::mat4 m_inverseProjection;
     };
 
 struct light
     {
-        glm::vec3 m_direction = { 0.f, 0.f, 0.f };
-        float m_intensity = 1.f;
+        alignas(16) glm::vec3 m_direction = { 0.f, 0.f, 0.f };
+        alignas(16) float m_intensity = 1.f;
     };
 
-struct sphere
+constexpr int c_groundTextureMax = 4;
+struct groundTextureData
     {
-        glm::vec3 m_position;
-        glm::vec3 m_albedo;
-        glm::vec3 m_specular;
-        float m_radius = 1.f;
+        int groundTextureCount = 0;
+        alignas(16) glm::vec3 heightStart[c_groundTextureMax] = {};
     };
+
+void loadTexture(const char *file, vulkanImage &image, renderer &renderer)
+    {
+        int channels;
+        int width;
+        int height;
+        stbi_uc *m_pixelData = stbi_load(file, &width, &height, &channels, STBI_rgb_alpha);
+
+        image.create(width, height, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_IMAGE_TYPE_2D);
+
+        unsigned int imageSize = width * height * 4;
+        vulkanBuffer buffer;
+        buffer.create(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
+        void *data;
+        vmaMapMemory(*globals::g_vulkanAllocator, buffer.getUnderlyingAllocation(), &data);
+        std::memcpy(data, m_pixelData, static_cast<size_t>(imageSize));
+        vmaUnmapMemory(*globals::g_vulkanAllocator, buffer.getUnderlyingAllocation());            
+
+        stbi_image_free(m_pixelData);
+
+        VkBufferImageCopy region{};
+        region.bufferOffset = 0;
+        region.bufferRowLength = 0;
+        region.bufferImageHeight = 0;
+
+        region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        region.imageSubresource.mipLevel = 0;
+        region.imageSubresource.baseArrayLayer = 0;
+        region.imageSubresource.layerCount = 1;
+
+        region.imageOffset = { 0, 0, 0 };
+        region.imageExtent = {
+            (uint32_t)width,
+            (uint32_t)height,
+            1
+        };
+
+        renderer.transitionImageLayout(image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        renderer.copyBufferToImage(buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        renderer.transitionImageLayout(image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        buffer.cleanup();
+    }
 
 int main()
     {
@@ -65,6 +113,36 @@ int main()
         #else
         rng.randomSeed();
         #endif
+
+        constexpr int size = 128;
+        constexpr int depth = 10;
+        glm::vec3 rgb(222, 215, 252);
+        rgb /= 255.f;
+
+        sparseVoxelOctree testSVO(size);
+        /*testSVO.load("TestVoxelTree1.txt");
+        //testSVO.addVoxel(1.0, 1.0, 1.0, depth, rgb.r, rgb.g, rgb.b);
+        //testSVO.addVoxel(120.0, 1.0, 1.0, depth, rgb.r, rgb.g, rgb.b);
+        //testSVO.addVoxel(1.0, 100.0, 1.0, depth, rgb.r, rgb.g, rgb.b);
+        testSVO.addVoxel(1.0, 1.0, 100.0, depth, rgb.r, rgb.g, rgb.b);
+        
+        //testSVO.addVoxel(70.0, 100.0, 1.0, depth, rgb.r, rgb.g, rgb.b);
+        //testSVO.addVoxel(0.0, 100.0, 100.0, depth, rgb.r, rgb.g, rgb.b);
+        //testSVO.addVoxel(100.0, 1.0, 100.0, depth, rgb.r, rgb.g, rgb.b);
+        testSVO.addVoxel(100.0, 100.0, 100.0, depth, rgb.r, rgb.g, rgb.b);
+
+        testSVO.save("TestVoxelTree1.txt");*/
+
+        voxelGrid testGrid;
+        testGrid.load("testVoxelGrid.txt");
+
+        /*testGrid.init({160, 110, 100});
+        for (int i = 0; i < 5000; i++)
+            {
+                testGrid.add({ rng.generate(0, 159), rng.generate(0, 109), rng.generate(0, 99) }, voxel{ rgb.r, rgb.g, rgb.b });
+            }
+
+        testGrid.save("testVoxelGrid.txt");*/
 
         // we install keyboard callbacks in ImGui creation. To use custom ones we must disable it and call the ImGui callbacks in the handler
         glfwInit();
@@ -86,8 +164,8 @@ int main()
         mvpCamera.m_projection = glm::perspective(glm::radians(100.f), renderer.getSize().x / static_cast<float>(renderer.getSize().y), 0.1f, static_cast<float>(1 << 16));
         mvpCamera.m_projection[1][1] *= -1;
 
-        constexpr float speed = 16.f;
-        constexpr float rotationSpeed = 60.f;
+        float speed = 250.f;
+        constexpr float rotationSpeed = 0.f;
 
         taskGraph taskGraph(2, 500);
         voxelSpace space;
@@ -95,12 +173,17 @@ int main()
         mvpCamera.m_model = space.getModelTransformation();
 
         descriptorSettings computeSettings;
-        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1);
-        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1);
-        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1);
-        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1);
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // output
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // camera
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // light
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // voxels
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // voxel shadows
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // heightmap
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, c_groundTextureMax); // ground texture samplers
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // ground texture data
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // skybox
         
-        renderer.createComputePipeline(computeSettings, "shaders/voxel_raytracing.spv");
+        renderer.createComputePipeline(computeSettings, "shaders/voxel_raytracing_gl.spv");
 
         glm::mat4 translation = glm::translate(glm::mat4(1.f), cameraPos);
         glm::quat quat = glm::angleAxis(glm::radians(-30.f), glm::normalize(glm::vec3{ 1.f, 0.f, 0.f }));
@@ -115,53 +198,122 @@ int main()
         vulkanImageView renderImageView;
 
         glm::ivec2 imageSize{2560, 1440};
-        renderImage.create(imageSize.x, imageSize.y, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-        renderImageView.create(renderer.getDevice(), renderImage, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+        renderImage.create(imageSize.x, imageSize.y, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_2D);
+        renderImageView.create(renderer.getDevice(), renderImage, VK_FORMAT_R8G8B8A8_SNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
         
         renderer.transitionImageLayout(renderImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-        std::vector<sphere> spheres;
-        glm::vec3 spherePos = {0, 1.03f, 0};
-        for (int x = 0; x < 10; x++)
-            {
-                for (int y = 0; y < 10; y++)
-                    {
-                        glm::vec3 colour = { rng.generate(0.f, 1.f), rng.generate(0.f, 1.f), rng.generate(0.f, 1.f) };
-                        float rngValue = rng.generate(0.f, 1.f);
-                        bool metal = rngValue < 0.5f;
-
-                        sphere s;
-                        s.m_radius = 1.f;
-                        s.m_albedo = metal ? glm::vec3(0.f) : colour;
-                        s.m_specular = metal ? colour : glm::vec3(1.f) * 0.04f;
-
-                        s.m_position = spherePos;
-                        spherePos.z += 4.f;
-
-                        spheres.push_back(s);
-                    }
-                spherePos.z = 0.f;
-                spherePos.x += 4.f;
-            }
-
-        storageBuffer sphereBuffer(spheres.size(), sizeof(sphere), spheres.data());
+        //storageBuffer sphereBuffer(spheres.size(), sizeof(sphere), spheres.data());
 
         light light;
-        light.m_direction = glm::normalize(glm::vec3(-2.f, -10.f, 5.f));
+        light.m_direction = glm::normalize(glm::vec3(0.709, -0.670, -0.231));
         light.m_intensity = 1.f;
 
         uniformBuffer lightUBO(light);
+
+        alignas(16) vulkanImage heightmapImage;
+        vulkanImageView heightmapView;
+        vulkanSampler heightmapSampler;
+
+        loadTexture("banff_heightmap/banff_heightmap Height Map (ASTER 30m).png", heightmapImage, renderer);
+        //loadTexture("banff_heightmap/test.jpg", heightmapImage, renderer);
+
+        heightmapView.create(renderer.getDevice(), heightmapImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, heightmapImage.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
+        heightmapSampler.create(renderer.getDevice(), heightmapImage.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
+
+        alignas(16) vulkanImage voxelGrid;
+        vulkanImageView voxelGridView;
+        vulkanSampler voxelImageSampler;
+
+        alignas(16) vulkanImage voxelShadowGrid;
+        vulkanImageView voxelShadowGridView;
+        vulkanSampler voxelShadowImageSampler;
+
+        voxelGrid.create(160, 110, 100, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R5G6B5_UNORM_PACK16, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_3D);
+        voxelGridView.create(renderer.getDevice(), voxelGrid, VK_FORMAT_R5G6B5_UNORM_PACK16, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D);
+        voxelImageSampler.create(renderer.getDevice(), voxelGrid.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
+
+        voxelShadowGrid.create(160, 110, 100, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_3D);
+        voxelShadowGridView.create(renderer.getDevice(), voxelShadowGrid, VK_FORMAT_R8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D);
+        voxelShadowImageSampler.create(renderer.getDevice(), voxelShadowGrid.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
+
+        storageBuffer temp;
+        storageBuffer tempShadow;
+        testGrid.mapToStorageBuffer(temp, tempShadow);
+
+        VkBufferImageCopy bufferCopyRegion{};
+        bufferCopyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        bufferCopyRegion.imageSubresource.mipLevel = 0;
+        bufferCopyRegion.imageSubresource.baseArrayLayer = 0;
+        bufferCopyRegion.imageSubresource.layerCount = 1;
+        bufferCopyRegion.imageExtent.width = 160;
+        bufferCopyRegion.imageExtent.height = 110;
+        bufferCopyRegion.imageExtent.depth = 100;
+
+        renderer.transitionImageLayout(voxelGrid, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        renderer.copyBufferToImage(temp.getStorageBuffer(), voxelGrid, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
+        renderer.transitionImageLayout(voxelGrid, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        renderer.transitionImageLayout(voxelShadowGrid, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        renderer.copyBufferToImage(tempShadow.getStorageBuffer(), voxelShadowGrid, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
+        renderer.transitionImageLayout(voxelShadowGrid, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+        temp.destroy();
+        tempShadow.destroy();
+
+        //storageBuffer voxelStorageBuffer;
+        //testSVO.mapToStorageBuffer(voxelStorageBuffer);
+
+        vulkanImageView groundViews[c_groundTextureMax] = {};
+        vulkanSampler groundSamplers[c_groundTextureMax] = {};
+        
+        alignas(16) vulkanImage lowGrass;
+        loadTexture("textures/TexturesCom_Grass0202_1_seamless_S.jpg", lowGrass, renderer);
+        groundViews[0].create(renderer.getDevice(), lowGrass, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, lowGrass.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
+        groundSamplers[0].create(renderer.getDevice(), lowGrass.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT);
+
+        alignas(16) vulkanImage medGrass;
+        loadTexture("textures/TexturesCom_Grass0157_1_seamless_S.jpg", medGrass, renderer);
+        groundViews[1].create(renderer.getDevice(), medGrass, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, medGrass.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
+        groundSamplers[1].create(renderer.getDevice(), medGrass.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT);
+
+        alignas(16) vulkanImage rock;
+        loadTexture("textures/TexturesCom_RockRough0030_2_seamless_S.jpg", rock, renderer);
+        groundViews[2].create(renderer.getDevice(), rock, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, rock.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
+        groundSamplers[2].create(renderer.getDevice(), rock.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT);
+
+        groundTextureData gtd;
+        gtd.heightStart[0].x = 20.f;
+        gtd.heightStart[0].y = 200.f;
+
+        gtd.heightStart[1].x = 300.f;
+        gtd.heightStart[1].y = 500.f;
+
+        gtd.heightStart[2].x = 600.f;
+        gtd.heightStart[2].y = 1600.f;
+        gtd.groundTextureCount = 3;
+        uniformBuffer gtdUBO(gtd);
+
+        alignas(16) vulkanImage skybox;
+        loadTexture("textures/skybox.jpg", skybox, renderer);
+        vulkanImageView skyboxView(renderer.getDevice(), skybox, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, skybox.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
+        vulkanSampler skyboxSampler(renderer.getDevice(), skybox.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
         descriptorSet *computeDescriptor = renderer.createComputeDescriptorSet(0);
         computeDescriptor->bindImage(renderImageView);
         computeDescriptor->bindUBO(viewUBO.getUniformBuffer(), viewUBO.getBufferSize());
         computeDescriptor->bindUBO(lightUBO.getUniformBuffer(), lightUBO.getBufferSize());
-        computeDescriptor->bindSBO(sphereBuffer.getStorageBuffer(), sphereBuffer.getBufferSize());
+        computeDescriptor->bindImage(voxelGridView, voxelImageSampler);
+        computeDescriptor->bindImage(voxelShadowGridView, voxelShadowImageSampler);
+        computeDescriptor->bindImage(heightmapView, heightmapSampler);
+        computeDescriptor->bindImages(groundViews, groundSamplers, gtd.groundTextureCount);
+        computeDescriptor->bindUBO(gtdUBO.getUniformBuffer(), gtdUBO.getBufferSize());
+        computeDescriptor->bindImage(skyboxView, skyboxSampler);
         computeDescriptor->update();
         
-        vulkanImage finalImage(imageSize.x, imageSize.y, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY);
-        vulkanImageView finalImageView(renderer.getDevice(), finalImage, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1);
-        vulkanSampler finalImageSampler(renderer.getDevice(), finalImage.mipLevels);
+        vulkanImage finalImage(imageSize.x, imageSize.y, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_2D);
+        vulkanImageView finalImageView(renderer.getDevice(), finalImage, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
+        vulkanSampler finalImageSampler(renderer.getDevice(), finalImage.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 
         renderer.transitionImageLayout(finalImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
@@ -178,6 +330,8 @@ int main()
         double currentTime = updateClock.getTime().asSeconds();
         double newTime = 0.0;
         double frameTime = 0.0;
+
+        fe::clock fpsUpdateClock;
 
         double accumulator = 0.0;
         while (app.isOpen())
@@ -199,7 +353,7 @@ int main()
                 app.processEvents();
                 renderer.updateImGui();
 
-                if (++index >= frameTimes.size())
+                if (++index >= frameTimes.size() || fpsUpdateClock.getTime() >= fe::seconds(1))
                     {
                         int64_t avgTime = 0;
                         for (auto &frameTime : frameTimes)
@@ -210,10 +364,11 @@ int main()
                         fe::time avgFrameTime = fe::microseconds(avgTime / frameTimes.size());
                         unsigned int fps = static_cast<unsigned int>(1.0 / avgFrameTime.asSeconds());
 
-                        std::string formatted = std::to_string(avgFrameTime.asSeconds()) + " | " + std::to_string(fps);
+                        std::string formatted = std::to_string(avgFrameTime.asSeconds()) + " | " + std::to_string(fps) + " | " + std::to_string(fpsUpdateClock.getTime().asSeconds());
 
                         glfwSetWindowTitle(app.getUnderlyingWindow(), formatted.c_str());
                         index = 0;
+                        fpsUpdateClock.restart();
                     }
 
                 bool mouseClick = false;
@@ -302,6 +457,20 @@ int main()
                 slid |= ImGui::SliderFloat("Light Direction X", &light.m_direction.x, -1.f, 1.f);
                 slid |= ImGui::SliderFloat("Light Direction Y", &light.m_direction.y, -1.f, 1.f);
                 slid |= ImGui::SliderFloat("Light Direction Z", &light.m_direction.z, -1.f, 1.f);
+                ImGui::SliderFloat("Speed", &speed, 0.f, 5000.f);
+
+                float posX = cameraPos.x;
+                float posZ = cameraPos.z;
+                float posY = cameraPos.y;
+                bool posChange = ImGui::SliderFloat("PosX", &posX, 0.f, 500.f);
+                posChange |= ImGui::SliderFloat("PosY", &posY, 0.f, 500.f);
+                posChange |= ImGui::SliderFloat("PosZ", &posZ, 0.f, 500.f);
+                cameraPos.y = posY;
+                cameraPos.x = posX;
+                cameraPos.z = posZ;
+                
+                light.m_direction = glm::normalize(light.m_direction);
+
                 ImGui::End();
 
                 if (slid)
@@ -309,7 +478,7 @@ int main()
                         lightUBO.bind(light);
                     }
                 
-                if (keyPressed)
+                if (keyPressed || posChange)
                     {
                         //camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0, -1.f, 0));
                         //mvpUBO.bind(camera);
@@ -320,9 +489,9 @@ int main()
                         viewUBO.bind(camera);
                     }
 
-                renderer.dispatchCompute(0, computeDescriptor, imageSize.x / 8, imageSize.y / 8, 1);
-
-                if (mouseClick)
+                renderer.dispatchCompute(0, computeDescriptor, imageSize.x / 32, imageSize.y / 32, 1);
+                
+                /*if (mouseClick)
                     {
                         glm::ivec3 position = space.raycast(cameraPos, cameraDir);
 
@@ -334,7 +503,7 @@ int main()
                             {
                                 space.setAt(position, voxelType::NONE);
                             }
-                    }
+                    }*/
 
                 renderer.blitImage(renderImage, VK_IMAGE_LAYOUT_GENERAL, finalImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, imageSize.x, imageSize.y);
 
@@ -344,7 +513,7 @@ int main()
                 renderer.recordCommandBuffer();
                 taskGraph.execute();
 
-                renderer.display();//break;
+                renderer.display();
             }
 
         renderer.waitForDeviceIdle();
@@ -353,9 +522,42 @@ int main()
 
         taskGraph.stop();
 
-        sphereBuffer.destroy();
+        //voxelStorageBuffer.destroy();
+        //sphereBuffer.destroy();
         viewUBO.destroy();
         lightUBO.destroy();
+
+        lowGrass.cleanup();
+        medGrass.cleanup();
+        rock.cleanup();
+
+        gtdUBO.destroy();
+
+        skybox.cleanup();
+        skyboxView.cleanup();
+        skyboxSampler.cleanup();
+
+        for (auto &s : groundSamplers)
+            {
+                s.cleanup();
+            }
+
+        for (auto &v : groundViews)
+            {
+                v.cleanup();
+            }
+
+        voxelGrid.cleanup();
+        voxelGridView.cleanup();
+        voxelImageSampler.cleanup();
+
+        voxelShadowGrid.cleanup();
+        voxelShadowGridView.cleanup();
+        voxelShadowImageSampler.cleanup();
+
+        heightmapImage.cleanup();
+        heightmapSampler.cleanup();
+        heightmapView.cleanup();
 
         finalImage.cleanup();
         finalImageSampler.cleanup();

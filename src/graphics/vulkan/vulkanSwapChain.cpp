@@ -120,7 +120,7 @@ void vulkanSwapChain::create(VkDevice device, VkPhysicalDevice physicalDevice, V
         m_swapChainImageViews.resize(m_swapChainImages.size());
         for (std::size_t i = 0; i < m_swapChainImages.size(); i++)
             {
-                m_swapChainImageViews[i].create(device, m_swapChainImages[i], m_swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+                m_swapChainImageViews[i].create(device, m_swapChainImages[i], m_swapChainImageFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
             }
 
         m_cleanedUp = false;

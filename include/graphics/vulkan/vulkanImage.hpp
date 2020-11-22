@@ -15,9 +15,9 @@ class vulkanImage
 
         public:
             vulkanImage();
-            vulkanImage(unsigned int width, unsigned int height, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage);
+            vulkanImage(unsigned int width, unsigned int height, unsigned int depth, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImageType imageType);
             ~vulkanImage();
-            void create(unsigned int width, unsigned int height, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage);
+            void create(unsigned int width, unsigned int height, unsigned int depth, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImageType imageType);
             void cleanup();
 
             const int &mipLevels;

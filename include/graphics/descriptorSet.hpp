@@ -14,9 +14,19 @@ class descriptorSettings;
 class descriptorSet
     {
         private:
+            struct metaImageInfo
+            {
+                std::vector<VkDescriptorImageInfo> m_imageInfo;
+                metaImageInfo() = default;
+                metaImageInfo(VkDescriptorImageInfo info)
+                    {
+                        m_imageInfo.push_back(info);
+                    }
+            };
+
             std::vector<vulkanDescriptorSet> m_descriptorSets;
             std::vector<VkDescriptorBufferInfo> m_bufferInfo;
-            VkDescriptorImageInfo m_imageInfo;
+            std::vector<metaImageInfo> m_imageInfo;
             bool m_needsUpdate = false;
 
             const descriptorSettings *m_settings = nullptr;
@@ -27,6 +37,7 @@ class descriptorSet
             void cleanup();
 
             void bindImage(const vulkanImageView &imageView, const vulkanSampler &imageSampler);
+            void bindImages(const vulkanImageView *imageViews, const vulkanSampler *imageSamplers, int count);
             void bindImage(const vulkanImageView &imageView);
             void bindUBO(const vulkanBuffer &buffer, VkDeviceSize range);
             void bindSBO(const vulkanBuffer &buffer, VkDeviceSize range);

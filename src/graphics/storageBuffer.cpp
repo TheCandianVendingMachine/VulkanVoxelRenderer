@@ -19,7 +19,7 @@ storageBuffer::~storageBuffer()
 
 void storageBuffer::create(unsigned int count, std::size_t objectSize)
     {
-        m_storageBuffer.create(count * objectSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
+        m_storageBuffer.create(count * objectSize, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU);
         m_count = count;
         m_size = objectSize;
     }

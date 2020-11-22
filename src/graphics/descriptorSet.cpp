@@ -25,17 +25,41 @@ void descriptorSet::cleanup()
 
 void descriptorSet::bindImage(const vulkanImageView &imageView, const vulkanSampler &imageSampler)
     {
-        m_imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_imageInfo.imageView = imageView;
-        m_imageInfo.sampler = imageSampler;
+        VkDescriptorImageInfo newInfo{};
+
+        newInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        newInfo.imageView = imageView;
+        newInfo.sampler = imageSampler;
+
+        m_imageInfo.emplace_back(newInfo);
+
+        m_needsUpdate = true;
+    }
+
+void descriptorSet::bindImages(const vulkanImageView *imageViews, const vulkanSampler *imageSamplers, int count)
+    {
+        m_imageInfo.emplace_back();
+        for (int i = 0; i < count; i++)
+        {
+            VkDescriptorImageInfo newInfo{};
+            newInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            newInfo.imageView = imageViews[i];
+            newInfo.sampler = imageSamplers[i];
+
+            m_imageInfo.back().m_imageInfo.push_back(newInfo);
+        }
 
         m_needsUpdate = true;
     }
 
 void descriptorSet::bindImage(const vulkanImageView &imageView)
     {
-        m_imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        m_imageInfo.imageView = imageView;
+        VkDescriptorImageInfo newInfo{};
+
+        newInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        newInfo.imageView = imageView;
+
+        m_imageInfo.emplace_back(newInfo);
 
         m_needsUpdate = true;
     }
@@ -75,6 +99,7 @@ void descriptorSet::update()
 
                 std::vector<VkWriteDescriptorSet> descriptorWrites = m_settings->getDescriptorWrites();
                 unsigned int bufferIndex = 0;
+                unsigned int imageIndex = 0;
                 for (auto &write : descriptorWrites)
                     {
                         write.dstSet = descriptorSet;
@@ -85,11 +110,15 @@ void descriptorSet::update()
                                     write.pBufferInfo = &m_bufferInfo[bufferIndex++];
                                     break;
                                 case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-                                    m_imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+                                    for (auto &imageInfo : m_imageInfo[imageIndex].m_imageInfo)
+                                        {
+                                            imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+                                        }
                                     [[fallthrough]];
                                 case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
                                 case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-                                    write.pImageInfo = &m_imageInfo;
+                                    write.descriptorCount = m_imageInfo[imageIndex].m_imageInfo.size();
+                                    write.pImageInfo = m_imageInfo[imageIndex++].m_imageInfo.data();
                                     break;
                                 default:
                                     break;

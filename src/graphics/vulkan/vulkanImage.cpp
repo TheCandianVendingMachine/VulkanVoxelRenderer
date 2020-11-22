@@ -6,10 +6,10 @@ vulkanImage::vulkanImage() :
     {
     }
 
-vulkanImage::vulkanImage(unsigned int width, unsigned int height, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage) :
+vulkanImage::vulkanImage(unsigned int width, unsigned int height, unsigned int depth, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImageType imageType) :
     mipLevels(m_mipLevels)
     {
-        create(width, height, mipLevels, numSamples, format, tiling, usage, memoryUsage);
+        create(width, height, depth, mipLevels, numSamples, format, tiling, usage, memoryUsage, imageType);
     }
 
 vulkanImage::~vulkanImage()
@@ -17,7 +17,7 @@ vulkanImage::~vulkanImage()
         cleanup();
     }
 
-void vulkanImage::create(unsigned int width, unsigned int height, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage)
+void vulkanImage::create(unsigned int width, unsigned int height, unsigned int depth, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImageType imageType)
     {
         if (mipLevels <= 0)
             {
@@ -27,10 +27,10 @@ void vulkanImage::create(unsigned int width, unsigned int height, int mipLevels,
 
         VkImageCreateInfo imageCreateInfo{};
         imageCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageCreateInfo.imageType = VK_IMAGE_TYPE_2D;
+        imageCreateInfo.imageType = imageType;
         imageCreateInfo.extent.width = static_cast<uint32_t>(width);
         imageCreateInfo.extent.height = static_cast<uint32_t>(height);
-        imageCreateInfo.extent.depth = 1;
+        imageCreateInfo.extent.depth = static_cast<uint32_t>(depth);
         imageCreateInfo.mipLevels = static_cast<uint32_t>(mipLevels);
         imageCreateInfo.arrayLayers = 1;
         imageCreateInfo.format = format;

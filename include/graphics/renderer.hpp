@@ -139,5 +139,6 @@ class renderer
 
             void transitionImageLayout(const vulkanImage &image, VkImageLayout oldLayout, VkImageLayout newLayout);
             void blitImage(vulkanImage &src, VkImageLayout srcLayout, vulkanImage &dst, VkImageLayout dstLayout, int width, int height);
+            void copyBufferToImage(vulkanBuffer &source, vulkanImage &destination, VkImageLayout dstLayout, uint32_t regionCount, VkBufferImageCopy *copyRegions);
 
     };

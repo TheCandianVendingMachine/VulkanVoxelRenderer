@@ -2,8 +2,8 @@
 
 void image::create(VkDevice device, VkImageAspectFlagBits imageAspectFlags, unsigned int width, unsigned int height, uint32_t mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage)
     {
-        m_image.create(width, height, mipLevels, numSamples, format, tiling, usage, memoryUsage);
-        m_imageView.create(device, m_image, format, imageAspectFlags, mipLevels);
+        m_image.create(width, height, 1, mipLevels, numSamples, format, tiling, usage, memoryUsage, VkImageType::VK_IMAGE_TYPE_2D);
+        m_imageView.create(device, m_image, format, imageAspectFlags, mipLevels, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
         setImageSize(width, height);
         setMipLevels(mipLevels);
     }

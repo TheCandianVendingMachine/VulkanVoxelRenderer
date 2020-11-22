@@ -1,9 +1,11 @@
 // sparseVoxelOctree.hpp
 // Represents voxels in 3d world in a easy to parse data format that can be sent to the GPU easily through a buffer
 #pragma once
+#include "voxel/voxel.hpp"
 #include <cstdint>
 #include <vector>
-#include <memory>
+
+#include <glm/vec3.hpp>
 
 class storageBuffer;
 class sparseVoxelOctree
@@ -12,10 +14,11 @@ class sparseVoxelOctree
             /*
                 Voxel is setup in memory as:
                     Occupied Children (8 Bits)  [Binary Mask]
+                    Leaf Children (8 Bits)      [Binary Mask]
                     Colour Red (5 bits)         [Number]
                     Colour Green (6 bits)       [Number]
                     Colour Blue (5 bits)        [Number]
-                    24 Bits
+                    32 Bits
 
             */
             union voxelNode
@@ -23,11 +26,8 @@ class sparseVoxelOctree
                     std::int32_t entire;
                     struct {
                         unsigned char children : 8;
-                        struct {
-                            unsigned char r : 5;
-                            unsigned char g : 6;
-                            unsigned char b : 5;
-                        } colour;
+                        unsigned char leaves : 8; // specifies whether each child is a leaf or not
+                        voxel voxel;
                     } data;
                 };
 
@@ -53,13 +53,14 @@ class sparseVoxelOctree
                     const std::uint64_t version = 1;
                     const std::uint64_t cpuNodeSize = sizeof(cpuNode);
                     const std::uint64_t headerSize = sizeof(fileMetaData);
+                    static constexpr std::uint64_t c_headerMetadataSize = sizeof(std::uint64_t) + sizeof(std::uint64_t) + sizeof(std::uint64_t);
                     // Change anything beneath this
                     std::uint64_t voxelCount = 0;
                 };
 
             static constexpr auto c_voxelNodeSize = sizeof(voxelNode);
             static constexpr auto c_cpuNodeSize = sizeof(cpuNode);
-            static constexpr auto c_gpuNodeSize = sizeof(cpuNode);
+            static constexpr auto c_gpuNodeSize = sizeof(gpuNode);
 
             unsigned int m_treeSize = 0;
             bool m_cpuChanged = true;

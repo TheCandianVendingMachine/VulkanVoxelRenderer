@@ -12,9 +12,9 @@ class vulkanImageView
 
         public:
             vulkanImageView() = default;
-            vulkanImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, int mipLevels);
+            vulkanImageView(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, int mipLevels, VkImageViewType imageType);
             ~vulkanImageView();
-            void create(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, int mipLevels);
+            void create(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, int mipLevels, VkImageViewType imageType);
             void cleanup();
 
             VkImageView getUnderlyingImageView() const;

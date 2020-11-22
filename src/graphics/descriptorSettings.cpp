@@ -27,7 +27,7 @@ std::vector<VkDescriptorPoolSize> descriptorSettings::getPoolSizes(unsigned int 
         for (unsigned int i = 0; i < m_descriptorSettings.size(); i++)
             {
                 poolSizes[i].type = m_descriptorSettings[i].m_type;
-                poolSizes[i].descriptorCount = swapChainImageCount;
+                poolSizes[i].descriptorCount = swapChainImageCount * m_descriptorSettings[i].m_descriptorCount;
             }
 
         return poolSizes;

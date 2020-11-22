@@ -13,9 +13,9 @@ class vulkanSampler
 
         public:
             vulkanSampler() = default;
-            vulkanSampler(VkDevice device, float maxLOD);
+            vulkanSampler(VkDevice device, float maxLOD, VkSamplerAddressMode samplerMode);
             ~vulkanSampler();
-            void create(VkDevice device, float maxLOD);
+            void create(VkDevice device, float maxLOD, VkSamplerAddressMode samplerMode);
             void cleanup();
 
             VkSampler getUnderlyingSampler() const;

@@ -13,7 +13,7 @@ class descriptorSettings;
 class descriptorHandler
     {
         private:
-            static constexpr unsigned int c_maxSets = 10;
+            static constexpr unsigned int c_maxSets = 32;
             unsigned int m_swapChainImageCount = 0;
 
             vulkanDescriptorSetLayout m_descriptorSetLayout;
