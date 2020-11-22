@@ -1,0 +1,461 @@
+#version 450
+layout(local_size_x = 32, local_size_y = 32) in;
+layout(rgba32f, binding = 0) uniform image2D imgOutput;
+
+layout(binding = 1) uniform CameraUBO {
+    mat4 cameraToWorld;
+    mat4 inverseCameraProjection;
+} camera;
+
+layout(binding = 2) uniform LightUBO {
+    vec3 direction;
+    vec3 intensity;
+} light;
+
+layout(binding = 3) uniform sampler3D voxels;
+layout(binding = 4) uniform sampler3D voxelShadows; // boolean array if a voxel exists at location or not
+
+layout(binding = 5) uniform sampler2D heightmap;
+
+const int c_maxGroundTextures = 4;
+layout(binding = 6) uniform sampler2D groundTextureSamplers[c_maxGroundTextures];
+layout(binding = 7) uniform groundTextureDataUBO {
+    int count;
+    vec2 height[c_maxGroundTextures];
+} groundTextureData;
+
+layout(binding = 8) uniform sampler2D skybox;
+
+const float PI = 3.14159265354f;
+const float INF = (1 - exp2(-24)) * exp2(128);
+const float EPSILON = 0.001f;
+
+const bool DISPLAY_NORMALS = false;
+const float NORMAL_EPSILON = 16.f;
+const int MAX_TRACES = 3;
+
+struct ray
+{
+    vec3 origin;
+    vec3 direction;
+    vec3 energy;
+};
+
+struct rayHit
+{
+    vec3 position;
+    vec3 normal;
+    vec3 albedo;
+    vec3 specular;
+    float distance;
+};
+
+float saturate(float value)
+{
+    return clamp(value, 0.0, 1.0);
+}
+
+rayHit createRayHit()
+{
+    rayHit rh;
+    rh.position = vec3(0.0f);
+    rh.normal = vec3(0.0f);
+    rh.albedo = vec3(0.0f);
+    rh.specular = vec3(0.0f);
+    rh.distance = INF;
+    return rh;
+}
+
+ray createRay(vec3 origin, vec3 direction)
+{
+    ray r;
+    r.origin = origin;
+    r.direction = direction;
+    r.energy = vec3(1.0f, 1.0f, 1.0f);
+    return r;
+}
+
+ray createCameraRay(vec2 uv)
+{
+    vec3 origin = (camera.cameraToWorld * vec4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
+    
+    vec3 direction = (camera.inverseCameraProjection * vec4(uv, 0.0f, 1.0f)).xyz;
+    direction = (camera.cameraToWorld * vec4(direction, 0.0f)).xyz;
+    direction = normalize(direction);
+
+    return createRay(origin, direction);
+}
+
+void intersectGroundPlane(ray r, inout rayHit bestHit)
+{
+    float t = -r.origin.y / r.direction.y;
+    if (t > 0 && t < bestHit.distance)
+    {
+        bestHit.distance = t;
+        bestHit.position = r.origin + t * r.direction;
+        bestHit.normal = vec3(0.0f, 1.0f, 0.0f);
+        bestHit.specular = vec3(0.1f);
+        bestHit.albedo = vec3(0.4f);
+    }
+}
+
+float sdBox(vec3 samplePosition, vec3 boxExtents)
+{
+    vec3 q = abs(samplePosition) - boxExtents;
+    return length(max(q, 0.0)) + min(max(max(q.x, q.y), q.z), 0.0);
+}
+
+float maxVec(vec3 v)
+{
+    return max(max(v.x, v.y), v.z);
+}
+
+// Implemented using "A Ray-Box Intersection Algorithm and Efficient Dynamic Voxel Rendering"
+// Journal of Computer Graphics Techniques Vol. 7, No. 3, 2018
+bool intersectCube(ray r, out float distance, out vec3 normal, vec3 cubeCentre, vec3 cubeRadius, const bool canStartInBox, const in bool oriented, in vec3 _invRayDir)
+{
+    float boxRot = 1.f;
+    r.origin = r.origin - cubeCentre;
+    
+    if (oriented)
+    {
+        r.direction *= boxRot;
+        r.origin *= boxRot;
+    }
+
+    float winding = canStartInBox && (maxVec(abs(r.origin) * (1.f / cubeRadius)) < 1.f) ? -1 : 1;
+    vec3 sign = -sign(r.direction);
+    vec3 distanceVec = cubeRadius * winding * sign - r.origin;
+
+    if (oriented) 
+    {
+        distanceVec /= r.direction;
+    }
+    else
+    {
+        distanceVec *= _invRayDir;
+    }
+
+    #define TEST(U, VW) (distanceVec.U >= 0.f) && all(lessThan(abs(r.origin.VW + r.direction.VW * distanceVec.U), cubeRadius.VW))
+    bvec3 test = bvec3(TEST(x, yz), TEST(y, zx), TEST(z, xy));
+    sign = test.x ? vec3(sign.x, 0.f, 0.f) : (test.y ? vec3(0.f, sign.y, 0.f) : vec3(0.f, 0.f, test.z ? sign.z : 0.f));
+    #undef TEST
+
+    distance = (sign.x != 0) ? distanceVec.x : ((sign.y != 0) ? distanceVec.y : distanceVec.z);
+    normal = oriented ? (boxRot * sign) : sign;
+    return (sign.x != 0) || (sign.y != 0) || (sign.z != 0);
+}
+
+float getOrientedCubeNormalAndDistance(ray r, out float distance, out vec3 normal, vec3 cubeCentre, vec3 cubeRadius, in vec3 _invRayDir)
+{
+    r.origin = r.origin - cubeCentre;
+
+    vec3 sign = -sign(r.direction);
+    vec3 distanceVec = cubeRadius * sign - r.origin;
+
+    distanceVec *= _invRayDir;
+
+    #define TEST(U, VW) (distanceVec.U >= 0.f) && all(lessThan(abs(r.origin.VW + r.direction.VW * distanceVec.U), cubeRadius.VW))
+    bvec3 test = bvec3(TEST(x, yz), TEST(y, zx), TEST(z, xy));
+    sign = test.x ? vec3(sign.x, 0.f, 0.f) : (test.y ? vec3(0.f, sign.y, 0.f) : vec3(0.f, 0.f, test.z ? sign.z : 0.f));
+    #undef TEST
+
+    distance = (sign.x != 0) ? distanceVec.x : ((sign.y != 0) ? distanceVec.y : distanceVec.z);
+    normal = sign;
+    return distance;
+}
+
+float getTerrainHeightAt(vec2 position)
+{
+    // heightmap assumes to only to R channel for gray rgb. Can convert later
+    return texture(heightmap, position / 16).r * 1024;
+}
+
+float getTerrainHeightAt(vec2 position, vec2 heightmapSize)
+{
+    return getTerrainHeightAt(position / heightmapSize);
+}
+
+float getDistanceToHeightmap(vec3 position, vec2 heightmapPosition, const vec2 heightmapSize)
+{
+    float height = getTerrainHeightAt(heightmapPosition / heightmapSize);
+    return distance(position, vec3(heightmapPosition.x, height, heightmapPosition.y)) - height;
+}
+
+float getDistanceToTerrain(vec3 position, vec3 direction, vec2 heightmapPosition, const int minDistance, const vec2 heightmapSize, const float minT, const float dt)
+{
+    float u = getDistanceToHeightmap(position, heightmapPosition, heightmapSize);
+    if (u <= minDistance)
+    {
+        for (u = 0.f; u < minDistance; u += dt)
+        {
+            position += direction * dt;
+            float height = getTerrainHeightAt(position.xz / heightmapSize);
+            if (position.y - height < minT)
+            {
+                break;
+            }
+        }
+    }
+
+    return u;
+}
+
+float getDistanceToHeightmap(vec3 position)
+{
+    return getDistanceToHeightmap(position, position.xz, vec2(textureSize(heightmap, 0)));  
+}
+
+void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
+{
+    const float minT = 0.05f;
+    const float maxT = 25000.f;
+    const float tInc = 1.f;
+    const int checkDistance = 15;
+
+    vec2 heightmapSize = textureSize(heightmap, 0);
+    vec3 rayPosition = r.origin;
+
+    float t = 0.f;
+    float dt;
+    for (int i = 0; i < 500; i++)
+    {
+        dt = getDistanceToTerrain(rayPosition, r.direction, rayPosition.xz, checkDistance, heightmapSize, minT, tInc);
+        if (dt < minT || t > maxT) { break; }
+        rayPosition = rayPosition + dt * r.direction;
+        t += dt;
+    }
+
+    if (dt < minT && t < bestHit.distance)
+    {
+        // hit
+        // thanks Inigo Quilez https://www.iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
+        const vec2 h = vec2(NORMAL_EPSILON, 0);
+        vec3 normal = normalize(vec3(
+            getTerrainHeightAt(rayPosition.xz - h.xy, heightmapSize) - getTerrainHeightAt(rayPosition.xz + h.xy, heightmapSize),
+            2.f * NORMAL_EPSILON,
+            getTerrainHeightAt(rayPosition.xz - h.yx, heightmapSize) - getTerrainHeightAt(rayPosition.xz + h.yx, heightmapSize)
+        ));
+
+        bestHit.distance = t;
+        bestHit.position = rayPosition;
+        bestHit.normal = normal;
+        bestHit.specular = vec3(0.01f);
+        bestHit.albedo = normal;
+
+        if (DISPLAY_NORMALS)
+        {
+            return;
+        }
+
+        float height = getTerrainHeightAt(rayPosition.xz / heightmapSize);
+
+        if (height < 20.f)
+        {
+            // water
+            bestHit.specular = vec3(0.3f, 0.56f, 0.6f);
+            bestHit.albedo = vec3(0.61f, 0.82, 0.85);
+        }
+        else if (groundTextureData.count >= 2)
+        {
+            int iMin = -1;
+            int iMax = groundTextureData.count;
+            for (int i = 0; i < groundTextureData.count; i++)
+            {
+                if (height < groundTextureData.height[i].x && i < iMax)
+                {
+                    // below a boundary
+                    iMax = i;
+                }
+
+                if (height > groundTextureData.height[i].y && i > iMin)
+                {
+                    // above a boundary
+                    iMin = i;
+                }
+
+                if (height < groundTextureData.height[i].y && height > groundTextureData.height[i].x)
+                {
+                    // we are inside a boundary
+                    iMin = i;
+                    iMax = i;
+                    break;
+                }
+            }
+
+            bestHit.specular = vec3(0.f);
+            if (iMin < 0 || iMax >= groundTextureData.count || iMin == iMax)
+            {
+                int index = (iMin < 0) ? iMax : iMin;
+
+                bestHit.albedo = texture(groundTextureSamplers[index], bestHit.position.xz / textureSize(groundTextureSamplers[index], 0)).rgb;
+            }
+            else
+            {
+                vec4 colourA = texture(groundTextureSamplers[iMin], bestHit.position.xz / textureSize(groundTextureSamplers[iMin], 0));
+                vec4 colourB = texture(groundTextureSamplers[iMax], bestHit.position.xz / textureSize(groundTextureSamplers[iMax], 0));
+
+                float a = smoothstep(groundTextureData.height[iMin].y, groundTextureData.height[iMax].x, height);
+                bestHit.albedo = mix(colourA.rgb, colourB.rgb, a);
+                //bestHit.albedo = normal;
+            }
+        }
+        else if (groundTextureData.count == 1)
+        {
+            bestHit.specular = vec3(0.f);
+            bestHit.albedo = texture(groundTextureSamplers[0], bestHit.position.xz / textureSize(groundTextureSamplers[0], 0)).rgb;
+        }
+    }
+}
+
+void traverseOctree(ray r, inout rayHit bestHit, uint depth)
+{
+
+}
+
+void traverseGrid(ray r, inout rayHit bestHit, uint depth, const vec3 gridPosition, const bool shadowTrace)
+{
+    const ivec3 gridSize = ivec3(160, 110, 100);
+    const vec3 halfGridSize = gridSize * 0.5f;
+    const float voxelSize = 1.f;
+    const float halfVoxelSize = voxelSize * 0.5f;
+
+    float distance = INF;
+    vec3 normal;
+
+    const vec3 originalOrigin = r.origin;
+    r.origin -= gridPosition;
+
+    float distanceToGrid = sdBox(r.origin, gridSize);
+    if (distanceToGrid > bestHit.distance)
+    {
+        return;
+    }
+
+    vec3 gridIntersect;
+    if (distanceToGrid <= 0)
+    {
+        gridIntersect = r.origin;
+    }
+    else
+    {
+        if (!intersectCube(r, distance, normal, halfGridSize, halfGridSize, false, false, 1.f / r.direction))
+        {
+            return;
+        }
+        gridIntersect = r.origin + distance * r.direction;
+    }
+
+    ivec3 origin = ivec3(floor(gridIntersect));
+    const ivec3 step = ivec3(sign(r.direction));
+
+    const vec3 tDelta = abs(vec3(length(r.direction)) / r.direction);
+    vec3 tMax = (sign(r.direction) * (vec3(origin) - r.origin) + (sign(r.direction) * 0.5) + 0.5) * tDelta;
+    bvec3 mask = bvec3(false);
+
+    // this loop is the hot path, should optimise it
+    for (int i = 0; i < 9000; i++)
+    {
+        mask = lessThanEqual(tMax.xyz, min(tMax.yzx, tMax.zxy));
+        tMax += vec3(mask) * tDelta;
+        origin += ivec3(mask) * step;
+
+        if (!shadowTrace)
+        {
+            bool hitTexel = any(greaterThan(texelFetch(voxels, origin, 0), vec4(0.f, 0.f, 0.f, 1.f)));
+            if (any(lessThan(gridSize, origin)) || any(lessThan(origin, ivec3(0.f))) || hitTexel)
+            {
+                r.origin = originalOrigin;
+                if (hitTexel && getOrientedCubeNormalAndDistance(r, distance, normal, gridPosition + origin + halfVoxelSize, vec3(halfVoxelSize), 1.f / r.direction) < bestHit.distance)
+                {
+                    bestHit.distance = distance;
+                    bestHit.position = r.origin + distance * r.direction;
+                    bestHit.normal = normal;
+                    bestHit.specular = texture(voxels, vec3(origin) / vec3(gridSize)).xyz;
+                    bestHit.albedo = vec3(0.4f);
+                }
+
+                return;
+            }
+        }
+        else
+        {
+            bool hitTexel = any(greaterThan(texelFetch(voxelShadows, origin, 0), vec4(0.f, 0.f, 0.f, 1.f)));
+            if (any(lessThan(gridSize, origin)) || any(lessThan(origin, ivec3(0.f))) || hitTexel)
+            {
+                r.origin = originalOrigin;
+                if (hitTexel && getOrientedCubeNormalAndDistance(r, distance, normal, gridPosition + origin + halfVoxelSize, vec3(halfVoxelSize), 1.f / r.direction) < bestHit.distance)
+                {
+                    bestHit.distance = distance;
+                    bestHit.position = r.origin + distance * r.direction;
+                    bestHit.normal = normal;
+                    bestHit.specular = texture(voxelShadows, vec3(origin) / vec3(gridSize)).xyz;
+                    bestHit.albedo = vec3(0.4f);
+                }
+
+                return;
+            }
+        }
+    }
+
+}
+
+rayHit trace(ray r, const bool shadowTrace)
+{
+    rayHit bestHit = createRayHit();
+    traverseTerrain(r, bestHit, shadowTrace);
+    //intersectGroundPlane(r, bestHit);
+    //traverseOctree(r, bestHit, 14); // 14 is about 1cm resolution for 128 wide world
+    //traverseGrid(r, bestHit, 3, vec3(1500.f, 500.f, 1500.f), shadowTrace);
+
+    return bestHit;
+}
+
+vec3 shade(inout ray r, rayHit hit)
+{
+    if (hit.distance < INF)
+    {   
+        r.origin = hit.position + hit.normal * EPSILON;
+        r.direction = reflect(r.direction, hit.normal);
+        r.energy *= hit.specular;
+        
+        ray shadowRay = createRay(hit.position + hit.normal * EPSILON, -light.direction);
+        rayHit shadowHit = trace(shadowRay, true);
+        if (shadowHit.distance != INF)
+        {
+            return saturate(-dot(hit.normal, light.direction)) * light.intensity.x * hit.albedo * 0.1f;
+        }
+
+        return saturate(-dot(hit.normal, light.direction)) * light.intensity.x * hit.albedo;
+    }
+    else
+    {   
+        r.energy = vec3(0.0f);
+        float theta = acos(r.direction.y) / -PI;
+        float phi = atan(-r.direction.z, r.direction.x) / -PI * 0.5f;
+        return texture(skybox, vec2(phi, theta)).rgb;
+    }
+}
+
+// 1000fps is no code
+void main()
+{
+    ivec2 dimensions = imageSize(imgOutput);
+    vec2 uv = vec2((gl_GlobalInvocationID.xy + vec2(0.5f, 0.5f)) / dimensions * 2.0f - 1.0f);
+    
+    ray r = createCameraRay(uv);
+   
+    vec3 shadeResult = vec3(0, 0, 0);
+    for (int i = 0; i < MAX_TRACES; i++)
+    {
+        rayHit hit = trace(r, false);
+        shadeResult += r.energy * shade(r, hit);
+        if (!any(greaterThan(r.energy, vec3(0.f))))
+        {
+            break;
+        }
+    }
+
+    imageStore(imgOutput, ivec2(gl_GlobalInvocationID.xy), vec4(shadeResult, 1.f));
+}
+
