@@ -282,7 +282,14 @@ int main()
         groundViews[2].create(renderer.getDevice(), rock, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, rock.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
         groundSamplers[2].create(renderer.getDevice(), rock.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
+        alignas(16) vulkanImage mud;
+        loadTexture("textures/TexturesCom_SoilMud0110_1_seamless_S.jpg", mud, renderer);
+        groundViews[3].create(renderer.getDevice(), mud, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mud.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
+        groundSamplers[3].create(renderer.getDevice(), mud.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_REPEAT);
+
         groundTextureData gtd;
+        // x is closest to 0
+        // y is farthest from 0
         gtd.heightStart[0].x = 20.f;
         gtd.heightStart[0].y = 200.f;
 
@@ -291,7 +298,10 @@ int main()
 
         gtd.heightStart[2].x = 600.f;
         gtd.heightStart[2].y = 1600.f;
-        gtd.groundTextureCount = 3;
+
+        gtd.heightStart[3].x = -20.f;
+        gtd.heightStart[3].y = -200.f;
+        gtd.groundTextureCount = 4;
         uniformBuffer gtdUBO(gtd);
 
         alignas(16) vulkanImage skybox;
@@ -530,6 +540,7 @@ int main()
         lowGrass.cleanup();
         medGrass.cleanup();
         rock.cleanup();
+        mud.cleanup();
 
         gtdUBO.destroy();
 
