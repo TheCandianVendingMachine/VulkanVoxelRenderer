@@ -1,5 +1,15 @@
 // Voxels!
 // Voxel rendering so I can hate myself
+#define TINYOBJLOADER_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+
+#include <stb_image.h>
+
+#undef TINYOBJLOADER_IMPLEMENTATION
+#undef STB_IMAGE_WRITE_IMPLEMENTATION
+#undef STB_IMAGE_IMPLEMENTATION
+
 #include "typeDefines.hpp"
 #include "graphics/window.hpp"
 #include "graphics/renderer.hpp"
@@ -31,8 +41,7 @@
 
 #include "voxel/sparseVoxelOctree.hpp"
 #include "voxel/voxelGrid.hpp"
-
-#include <stb_image.h>
+#include "voxel/heightmap.hpp"
 
 struct mvp
     {
@@ -211,15 +220,8 @@ int main()
 
         uniformBuffer lightUBO(light);
 
-        alignas(16) vulkanImage heightmapImage;
-        vulkanImageView heightmapView;
-        vulkanSampler heightmapSampler;
-
-        loadTexture("banff_heightmap/banff_heightmap Height Map (ASTER 30m).png", heightmapImage, renderer);
-        //loadTexture("banff_heightmap/test.jpg", heightmapImage, renderer);
-
-        heightmapView.create(renderer.getDevice(), heightmapImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, heightmapImage.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
-        heightmapSampler.create(renderer.getDevice(), heightmapImage.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
+        heightmap hm("banff_heightmap/banff_heightmap Height Map (ASTER 30m).png", renderer);
+        //heightmap hm("banff_heightmap/test.jpg", renderer);
 
         alignas(16) vulkanImage voxelGrid;
         vulkanImageView voxelGridView;
@@ -315,7 +317,7 @@ int main()
         computeDescriptor->bindUBO(lightUBO.getUniformBuffer(), lightUBO.getBufferSize());
         computeDescriptor->bindImage(voxelGridView, voxelImageSampler);
         computeDescriptor->bindImage(voxelShadowGridView, voxelShadowImageSampler);
-        computeDescriptor->bindImage(heightmapView, heightmapSampler);
+        computeDescriptor->bindImage(hm.getView(), hm.getSampler());
         computeDescriptor->bindImages(groundViews, groundSamplers, gtd.groundTextureCount);
         computeDescriptor->bindUBO(gtdUBO.getUniformBuffer(), gtdUBO.getBufferSize());
         computeDescriptor->bindImage(skyboxView, skyboxSampler);
@@ -478,8 +480,12 @@ int main()
                 cameraPos.y = posY;
                 cameraPos.x = posX;
                 cameraPos.z = posZ;
+
+                ImGui::Text("%f", hm.getHeight(cameraPos));
                 
                 light.m_direction = glm::normalize(light.m_direction);
+
+                cameraPos.y = hm.getHeight(cameraPos) + 1.83f; posChange = true;
 
                 ImGui::End();
 
@@ -566,9 +572,7 @@ int main()
         voxelShadowGridView.cleanup();
         voxelShadowImageSampler.cleanup();
 
-        heightmapImage.cleanup();
-        heightmapSampler.cleanup();
-        heightmapView.cleanup();
+        hm.destroy();
 
         finalImage.cleanup();
         finalImageSampler.cleanup();

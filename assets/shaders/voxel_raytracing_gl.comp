@@ -221,7 +221,7 @@ float getTerrainHeightAt(vec2 position, vec2 heightmapSize)
 
 float getDistanceToHeightmap(vec3 position, vec2 heightmapPosition, const vec2 heightmapSize)
 {
-    float height = getTerrainHeightAt(heightmapPosition / heightmapSize);
+    float height = getTerrainHeightAt(heightmapPosition, heightmapSize);
     return distance(position, vec3(heightmapPosition.x, height, heightmapPosition.y)) - height;
 }
 
@@ -233,7 +233,7 @@ float getDistanceToTerrain(vec3 position, vec3 direction, vec2 heightmapPosition
         for (u = 0.f; u < minDistance; u += dt)
         {
             position += direction * dt;
-            float height = getTerrainHeightAt(position.xz / heightmapSize);
+            float height = getTerrainHeightAt(position.xz, heightmapSize);
             if (position.y - height < minT)
             {
                 break;
@@ -258,9 +258,6 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
 
     vec2 heightmapSize = textureSize(heightmap, 0);
     vec3 rayPosition = r.origin;
-
-    float totalDensity = 0.f;
-    float transmittance = 1.f;
 
     float previousDistance = bestHit.distance;
 
@@ -297,7 +294,7 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
             return;
         }
 
-        float height = getTerrainHeightAt(rayPosition.xz / heightmapSize);
+        float height = getTerrainHeightAt(rayPosition.xz, heightmapSize);
 
         if (height < 20.f)
         {
@@ -314,6 +311,8 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
                 // we are underneath the terrain
                 for (int i = 0; i < groundTextureData.count; i++)
                 {
+                    if (groundTextureData.height[i].x >= 0.f || groundTextureData.height[i].y >= 0.f) { continue; }
+
                     if (rayPosition.y < -groundTextureData.height[i].x && i < iMax)
                     {
                         // below a boundary
@@ -339,6 +338,8 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
             {
                 for (int i = 0; i < groundTextureData.count; i++)
                 {
+                    if (groundTextureData.height[i].x < 0.f || groundTextureData.height[i].y < 0.f) { continue; }
+
                     if (height < groundTextureData.height[i].x && i < iMax)
                     {
                         // below a boundary
