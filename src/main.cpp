@@ -174,7 +174,7 @@ int main()
         mvpCamera.m_projection[1][1] *= -1;
 
         float speed = 250.f;
-        constexpr float rotationSpeed = 0.f;
+        constexpr float rotationSpeed = 50.f;
 
         taskGraph taskGraph(2, 500);
         voxelSpace space;
@@ -392,27 +392,27 @@ int main()
                         OPTICK_EVENT("fixed timestep", Optick::Category::GameLogic);
                         accumulator -= updateRate;
 
-                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_D))
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_W))
                             {
                                 cameraPos += cameraDir * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
-                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_A))
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_S))
                             {
                                 cameraPos += -cameraDir * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
-                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_S))
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_A))
                             {
-                                cameraPos += -glm::cross(cameraDir, glm::vec3(0, -1.f, 0)) * static_cast<float>(speed * updateRate);
+                                cameraPos += -glm::cross(cameraDir, glm::vec3(0, 1.f, 0)) * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
-                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_W))
+                        if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_D))
                             {
-                                cameraPos += glm::cross(cameraDir, glm::vec3(0, -1.f, 0)) * static_cast<float>(speed * updateRate);
+                                cameraPos += glm::cross(cameraDir, glm::vec3(0, 1.f, 0)) * static_cast<float>(speed * updateRate);
                                 keyPressed = true;
                             }
 
@@ -430,25 +430,25 @@ int main()
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_UP))
                             {
-                                cameraDir = glm::rotate(cameraDir, glm::radians(rotationSpeed * (float)updateRate), glm::cross(cameraDir, glm::vec3(0, -1.f, 0)));
+                                cameraDir = glm::rotate(cameraDir, glm::radians(rotationSpeed * (float)updateRate), glm::cross(cameraDir, glm::vec3(0, 1.f, 0)));
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_DOWN))
                             {
-                                cameraDir = glm::rotate(cameraDir, -glm::radians(rotationSpeed * (float)updateRate), glm::cross(cameraDir, glm::vec3(0, -1.f, 0)));
+                                cameraDir = glm::rotate(cameraDir, -glm::radians(rotationSpeed * (float)updateRate), glm::cross(cameraDir, glm::vec3(0, 1.f, 0)));
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_LEFT))
                             {
-                                cameraDir = glm::rotate(cameraDir, glm::radians(rotationSpeed * (float)updateRate), glm::vec3(0.f, -1.f, 0.f));
+                                cameraDir = glm::rotate(cameraDir, glm::radians(rotationSpeed * (float)updateRate), glm::vec3(0.f, 1.f, 0.f));
                                 keyPressed = true;
                             }
 
                         if (glfwGetKey(app.getUnderlyingWindow(), GLFW_KEY_RIGHT))
                             {
-                                cameraDir = glm::rotate(cameraDir, -glm::radians(rotationSpeed * (float)updateRate), glm::vec3(0.f, -1.f, 0.f));
+                                cameraDir = glm::rotate(cameraDir, -glm::radians(rotationSpeed * (float)updateRate), glm::vec3(0.f, 1.f, 0.f));
                                 keyPressed = true;
                             }
 
@@ -496,8 +496,11 @@ int main()
                 
                 if (keyPressed || posChange)
                     {
-                        //camera.m_view = glm::lookAt(cameraPos, cameraPos + cameraDir, glm::vec3(0, -1.f, 0));
+                        //camera.m_view = ;
                         //mvpUBO.bind(camera);
+
+                        quat = glm::quatLookAt(cameraDir, glm::vec3(0.f, 1.f, 0.f));
+
                         translation = glm::translate(glm::mat4(1.f), cameraPos);
                         camera.m_cameraToWorld = translation * glm::toMat4(quat);
                         camera.m_inverseProjection = glm::inverse(mvpCamera.m_projection);
