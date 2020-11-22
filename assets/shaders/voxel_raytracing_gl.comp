@@ -533,6 +533,7 @@ void main()
         }
     }
 
-    imageStore(imgOutput, ivec2(gl_GlobalInvocationID.xy), shadeResult);
+    vec4 finalColour = shadeResult;
+    imageStore(imgOutput, ivec2(gl_GlobalInvocationID.xy), finalColour);
 }
 

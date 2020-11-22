@@ -31,7 +31,7 @@ void heightmap::load(const char *filepath, renderer &renderer)
     {
         m_pixelData = stbi_load(filepath, &m_size.x, &m_size.y, &m_channels, STBI_rgb_alpha);
 
-        m_heightmap.create(m_size.x, m_size.y, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_IMAGE_TYPE_2D);
+        m_heightmap.create(m_size.x, m_size.y, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_IMAGE_TYPE_2D);
 
         unsigned int imageSize = m_size.x * m_size.y * 4;
 
@@ -67,7 +67,7 @@ void heightmap::load(const char *filepath, renderer &renderer)
 
         buffer.cleanup();
 
-        m_heightmapView.create(renderer.getDevice(), m_heightmap, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_heightmap.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
+        m_heightmapView.create(renderer.getDevice(), m_heightmap, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, m_heightmap.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
         m_heightmapSampler.create(renderer.getDevice(), m_heightmap.mipLevels, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
     }
 
@@ -103,5 +103,5 @@ float heightmap::getHeight(glm::vec3 position)
         unsigned char pixel = *(m_pixelData + offset);
 
         // desmos provided these numbers, pure magic
-        return std::pow(static_cast<double>(pixel) + 14.1124, 2.40191) * 0.00149229;
+        return (static_cast<float>(pixel) / 255.f) * b;
     }

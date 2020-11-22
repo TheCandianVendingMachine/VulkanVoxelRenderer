@@ -220,8 +220,8 @@ int main()
 
         uniformBuffer lightUBO(light);
 
-        heightmap hm("banff_heightmap/banff_heightmap Height Map (ASTER 30m).png", renderer);
-        //heightmap hm("banff_heightmap/test.jpg", renderer);
+        //heightmap hm("banff_heightmap/banff_heightmap Height Map (ASTER 30m).png", renderer);
+        heightmap hm("banff_heightmap/test.jpg", renderer);
 
         alignas(16) vulkanImage voxelGrid;
         vulkanImageView voxelGridView;
@@ -323,8 +323,8 @@ int main()
         computeDescriptor->bindImage(skyboxView, skyboxSampler);
         computeDescriptor->update();
         
-        vulkanImage finalImage(imageSize.x, imageSize.y, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_2D);
-        vulkanImageView finalImageView(renderer.getDevice(), finalImage, VK_FORMAT_R16G16B16A16_SNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
+        vulkanImage finalImage(imageSize.x, imageSize.y, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_2D);
+        vulkanImageView finalImageView(renderer.getDevice(), finalImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
         vulkanSampler finalImageSampler(renderer.getDevice(), finalImage.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE);
 
         renderer.transitionImageLayout(finalImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
@@ -485,7 +485,7 @@ int main()
                 
                 light.m_direction = glm::normalize(light.m_direction);
 
-                cameraPos.y = hm.getHeight(cameraPos) + 1.83f; posChange = true;
+                //cameraPos.y = hm.getHeight(cameraPos) + 1.83f; posChange = true;
 
                 ImGui::End();
 
