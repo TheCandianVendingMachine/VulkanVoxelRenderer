@@ -27,7 +27,7 @@ layout(binding = 7) uniform groundTextureDataUBO {
 layout(binding = 8) uniform sampler2D skybox;
 
 const float PI = 3.14159265354f;
-const float INF = (1 - exp2(-24)) * exp2(128);
+const float INF = 1e10;
 const float EPSILON = 0.001f;
 
 const bool DISPLAY_NORMALS = false;
@@ -165,10 +165,53 @@ float getOrientedCubeNormalAndDistance(ray r, out float distance, out vec3 norma
     return distance;
 }
 
+// thanks Inigo Quilez https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
+// truly the master at raymarching
+float opUnion(float d1, float d2)
+{
+    return min(d1, d2);
+}
+
+float opSubtraction(float d1, float d2)
+{
+    return max(-d1, d2);
+}
+
+float opIntersection(float d1, float d2)
+{
+    return max(d1, d2);
+}
+
+float opSmoothUnion(float d1, float d2, float k)
+{
+    float h = clamp(0.5f + 0.5f * (d2 - d1) / k, 0.f, 1.f);
+    return mix(d2, d1, h) - k * h * (1.f - h);
+}
+
+float opSmoothSubtraction(float d1, float d2, float k)
+{
+    float h = clamp(0.5f - 0.5f * ((d2 + d1) / k), 0.f, 1.f);
+    return mix(d2, -d1, h) + k * h * (1.f - h);
+}
+
+float opSmoothIntersection(float d1, float d2, float k)
+{
+    float h = clamp(0.5f - 0.5f * (d2 - d1) / k, 0.f, 1.f);
+    return mix(d2, d1, h) + k * h * (1.f - h);
+}
+
+float signedDistanceSphere(vec3 position, vec3 spherePosition, float sphereRadius)
+{
+    return distance(position, spherePosition) - sphereRadius;
+}
+
 float getTerrainHeightAt(vec2 position)
 {
+    const int a = 16;
+    const int b = a * 64;
+
     // heightmap assumes to only to R channel for gray rgb. Can convert later
-    return texture(heightmap, position / 16).r * 1024;
+    return texture(heightmap, position / a).r * b;
 }
 
 float getTerrainHeightAt(vec2 position, vec2 heightmapSize)
@@ -216,17 +259,23 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
     vec2 heightmapSize = textureSize(heightmap, 0);
     vec3 rayPosition = r.origin;
 
+    float totalDensity = 0.f;
+    float transmittance = 1.f;
+
+    float previousDistance = bestHit.distance;
+
     float t = 0.f;
     float dt;
     for (int i = 0; i < 500; i++)
     {
         dt = getDistanceToTerrain(rayPosition, r.direction, rayPosition.xz, checkDistance, heightmapSize, minT, tInc);
+
         if (dt < minT || t > maxT) { break; }
         rayPosition = rayPosition + dt * r.direction;
         t += dt;
     }
 
-    if (dt < minT && t < bestHit.distance)
+    if (dt < minT && t < previousDistance)
     {
         // hit
         // thanks Inigo Quilez https://www.iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
@@ -260,26 +309,55 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
         {
             int iMin = -1;
             int iMax = groundTextureData.count;
-            for (int i = 0; i < groundTextureData.count; i++)
+            if (rayPosition.y < height)
             {
-                if (height < groundTextureData.height[i].x && i < iMax)
+                // we are underneath the terrain
+                for (int i = 0; i < groundTextureData.count; i++)
                 {
-                    // below a boundary
-                    iMax = i;
-                }
+                    if (rayPosition.y < -groundTextureData.height[i].x && i < iMax)
+                    {
+                        // below a boundary
+                        iMax = i;
+                    }
 
-                if (height > groundTextureData.height[i].y && i > iMin)
-                {
-                    // above a boundary
-                    iMin = i;
-                }
+                    if (rayPosition.y > -groundTextureData.height[i].y && i > iMin)
+                    {
+                        // above a boundary
+                        iMin = i;
+                    }
 
-                if (height < groundTextureData.height[i].y && height > groundTextureData.height[i].x)
+                    if (rayPosition.y < -groundTextureData.height[i].y && rayPosition.y > -groundTextureData.height[i].x)
+                    {
+                        // we are inside a boundary
+                        iMin = i;
+                        iMax = i;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < groundTextureData.count; i++)
                 {
-                    // we are inside a boundary
-                    iMin = i;
-                    iMax = i;
-                    break;
+                    if (height < groundTextureData.height[i].x && i < iMax)
+                    {
+                        // below a boundary
+                        iMax = i;
+                    }
+
+                    if (height > groundTextureData.height[i].y && i > iMin)
+                    {
+                        // above a boundary
+                        iMin = i;
+                    }
+
+                    if (height < groundTextureData.height[i].y && height > groundTextureData.height[i].x)
+                    {
+                        // we are inside a boundary
+                        iMin = i;
+                        iMax = i;
+                        break;
+                    }
                 }
             }
 
@@ -287,7 +365,6 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
             if (iMin < 0 || iMax >= groundTextureData.count || iMin == iMax)
             {
                 int index = (iMin < 0) ? iMax : iMin;
-
                 bestHit.albedo = texture(groundTextureSamplers[index], bestHit.position.xz / textureSize(groundTextureSamplers[index], 0)).rgb;
             }
             else
@@ -297,7 +374,6 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
 
                 float a = smoothstep(groundTextureData.height[iMin].y, groundTextureData.height[iMax].x, height);
                 bestHit.albedo = mix(colourA.rgb, colourB.rgb, a);
-                //bestHit.albedo = normal;
             }
         }
         else if (groundTextureData.count == 1)
@@ -445,17 +521,17 @@ void main()
     
     ray r = createCameraRay(uv);
    
-    vec3 shadeResult = vec3(0, 0, 0);
+    vec4 shadeResult = vec4(0, 0, 0, 1.f);
     for (int i = 0; i < MAX_TRACES; i++)
     {
         rayHit hit = trace(r, false);
-        shadeResult += r.energy * shade(r, hit);
+        shadeResult.rgb += r.energy * shade(r, hit);
         if (!any(greaterThan(r.energy, vec3(0.f))))
         {
             break;
         }
     }
 
-    imageStore(imgOutput, ivec2(gl_GlobalInvocationID.xy), vec4(shadeResult, 1.f));
+    imageStore(imgOutput, ivec2(gl_GlobalInvocationID.xy), shadeResult);
 }
 
