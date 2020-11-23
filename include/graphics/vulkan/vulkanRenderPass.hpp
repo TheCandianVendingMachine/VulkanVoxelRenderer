@@ -21,6 +21,8 @@ class vulkanRenderPass
             void create(VkDevice device, const std::vector<vulkanSubpass> &subpasses, const vulkanAttachmentList &attachments);
             void cleanup();
 
+            bool isCreated() const;
+
             VkRenderPass getUnderlyingRenderPass() const;
             operator VkRenderPass() const;
 

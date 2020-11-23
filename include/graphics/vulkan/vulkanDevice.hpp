@@ -16,6 +16,8 @@ class vulkanDevice
             void create(VkPhysicalDevice physicalDevice, VkSurfaceKHR surface);
             void cleanup();
 
+            bool isCreated() const;
+
             VkDevice getUnderlyingDevice() const;
             operator VkDevice() const;
 

@@ -37,6 +37,11 @@ void vulkanShaderModule::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanShaderModule::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkShaderModule vulkanShaderModule::getUnderlyingShaderModule() const
     {
         return m_shaderModule;

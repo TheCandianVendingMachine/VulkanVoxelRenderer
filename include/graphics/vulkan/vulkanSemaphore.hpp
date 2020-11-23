@@ -18,6 +18,8 @@ class vulkanSemaphore
             void create(VkDevice device);
             void cleanup();
 
+            bool isCreated() const;
+
             VkSemaphore getUnderlyingSemaphore() const;
             operator VkSemaphore() const;
 

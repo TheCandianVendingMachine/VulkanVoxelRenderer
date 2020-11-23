@@ -18,6 +18,8 @@ class vulkanCommandPool
             void create(VkDevice device, vulkanQueueFamilyIndices queueFamilyIndices);
             void cleanup();
 
+            bool isCreated() const;
+
             VkCommandPool getUnderlyingCommandPool() const;
             operator VkCommandPool() const;
 

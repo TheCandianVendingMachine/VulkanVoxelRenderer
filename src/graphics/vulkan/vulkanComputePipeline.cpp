@@ -41,6 +41,11 @@ void vulkanComputePipeline::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanComputePipeline::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkPipeline vulkanComputePipeline::getUnderlyingPipeline() const
     {
         return m_computePipeline;

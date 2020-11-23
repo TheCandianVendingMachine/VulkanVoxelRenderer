@@ -83,6 +83,11 @@ void vulkanDevice::cleanup()
         m_cleanedUp = false;
     }
 
+bool vulkanDevice::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkDevice vulkanDevice::getUnderlyingDevice() const
     {
         return m_device;

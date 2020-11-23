@@ -21,6 +21,8 @@ class vulkanInstance
             void create(VkApplicationInfo appInfo, const std::vector<const char*> &extensions);
             void cleanup();
 
+            bool isCreated() const;
+
             VkInstance getUnderlyingInstance() const;
             operator VkInstance() const;
 

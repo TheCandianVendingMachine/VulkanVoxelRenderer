@@ -17,6 +17,8 @@ class vulkanImageView
             void create(VkDevice device, VkImage image, VkFormat format, VkImageAspectFlags aspectFlags, int mipLevels, VkImageViewType imageType);
             void cleanup();
 
+            bool isCreated() const;
+
             VkImageView getUnderlyingImageView() const;
             operator VkImageView() const;
 

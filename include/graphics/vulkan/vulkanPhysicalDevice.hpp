@@ -23,6 +23,8 @@ class vulkanPhysicalDevice
             void create(VkInstance instance, VkSurfaceKHR surface);
             void cleanup();
 
+            bool isCreated() const;
+
             VkSampleCountFlagBits getSampleCount() const;
 
             VkPhysicalDevice getUnderlyingPhysicalDevice() const;

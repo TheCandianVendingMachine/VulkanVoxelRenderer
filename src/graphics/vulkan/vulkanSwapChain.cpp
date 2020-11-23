@@ -138,6 +138,11 @@ void vulkanSwapChain::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanSwapChain::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 const std::vector<vulkanImageView> &vulkanSwapChain::getImageViews() const
     {
         return m_swapChainImageViews;

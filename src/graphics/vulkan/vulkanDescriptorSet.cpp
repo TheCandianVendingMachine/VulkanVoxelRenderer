@@ -34,6 +34,11 @@ void vulkanDescriptorSet::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanDescriptorSet::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkDescriptorSet vulkanDescriptorSet::getUnderlyingDescriptorSet() const
     {
         return m_descriptorSet;

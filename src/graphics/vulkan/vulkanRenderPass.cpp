@@ -56,6 +56,11 @@ void vulkanRenderPass::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanRenderPass::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkRenderPass vulkanRenderPass::getUnderlyingRenderPass() const
     {
         return m_renderPass;

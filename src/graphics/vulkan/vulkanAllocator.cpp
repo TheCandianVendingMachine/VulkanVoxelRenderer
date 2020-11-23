@@ -33,6 +33,11 @@ void vulkanAllocator::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanAllocator::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VmaAllocator vulkanAllocator::getUnderlyingAllocator() const
     {
         return m_allocator;

@@ -20,6 +20,8 @@ class vulkanImage
             void create(unsigned int width, unsigned int height, unsigned int depth, int mipLevels, VkSampleCountFlagBits numSamples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VmaMemoryUsage memoryUsage, VkImageType imageType);
             void cleanup();
 
+            bool isCreated() const;
+
             const int &mipLevels;
 
             VkImage getUnderlyingImage() const;

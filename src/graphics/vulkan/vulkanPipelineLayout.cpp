@@ -39,6 +39,11 @@ void vulkanPipelineLayout::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanPipelineLayout::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkPipelineLayout vulkanPipelineLayout::getUnderlyingPipelineLayout() const
     {
         return m_pipelineLayout;

@@ -18,6 +18,8 @@ class vulkanShaderModule
             void create(VkDevice device, const std::vector<char> &code);
             void cleanup();
 
+            bool isCreated() const;
+
             VkShaderModule getUnderlyingShaderModule() const;
             operator VkShaderModule() const;
 

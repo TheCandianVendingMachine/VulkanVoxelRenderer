@@ -27,6 +27,8 @@ class vulkanDescriptorSet
             void create(VkDevice device, VkDescriptorPool descriptorPool, const std::vector<VkDescriptorSetLayout> &descriptorSetLayouts);
             void cleanup();
 
+            bool isCreated() const;
+
             VkDescriptorSet getUnderlyingDescriptorSet() const;
             operator VkDescriptorSet() const;
 

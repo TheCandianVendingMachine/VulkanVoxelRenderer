@@ -47,6 +47,11 @@ void vulkanBuffer::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanBuffer::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkBuffer vulkanBuffer::getUnderlyingBuffer() const
     {
         return m_buffer;

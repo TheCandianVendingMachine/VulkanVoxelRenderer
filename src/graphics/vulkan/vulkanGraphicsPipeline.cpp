@@ -100,6 +100,11 @@ void vulkanGraphicsPipeline::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanGraphicsPipeline::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkPipeline vulkanGraphicsPipeline::getUnderlyingPipeline() const
     {
         return m_graphicsPipeline;

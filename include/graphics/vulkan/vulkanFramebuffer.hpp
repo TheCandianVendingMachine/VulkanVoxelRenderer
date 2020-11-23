@@ -18,6 +18,8 @@ class vulkanFramebuffer
             void create(VkDevice device, VkRenderPass renderPass, unsigned int attachmentCount, VkImageView *attachments, unsigned int width, unsigned int height);
             void cleanup();
 
+            bool isCreated() const;
+
             VkFramebuffer getUnderlyingFrameBuffer() const;
             operator VkFramebuffer() const;
 

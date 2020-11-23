@@ -35,6 +35,11 @@ void vulkanDescriptorSetLayout::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanDescriptorSetLayout::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkDescriptorSetLayout vulkanDescriptorSetLayout::getUnderlyingDescriptorSetLayout() const
     {
         return m_descriptorSetLayout;

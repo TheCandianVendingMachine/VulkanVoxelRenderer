@@ -70,6 +70,11 @@ void vulkanImage::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanImage::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkImage vulkanImage::getUnderlyingImage() const
     {
         return m_image;

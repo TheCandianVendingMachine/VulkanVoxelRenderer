@@ -19,6 +19,8 @@ class vulkanPipelineLayout
             void create(VkDevice device, const std::vector<VkDescriptorSetLayout> &layoutInfo);
             void cleanup();
 
+            bool isCreated() const;
+
             VkPipelineLayout getUnderlyingPipelineLayout() const;
             operator VkPipelineLayout() const;
 

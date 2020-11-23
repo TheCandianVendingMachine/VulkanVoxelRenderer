@@ -19,6 +19,8 @@ class vulkanDescriptorPool
             void create(VkDevice device, unsigned int descriptorSetCount, const std::vector<VkDescriptorPoolSize> &descriptors);
             void cleanup();
 
+            bool isCreated() const;
+
             VkDescriptorPool getUnderlyingDescriptorPool() const;
             operator VkDescriptorPool() const;
 

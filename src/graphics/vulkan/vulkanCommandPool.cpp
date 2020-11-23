@@ -38,6 +38,11 @@ void vulkanCommandPool::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanCommandPool::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkCommandPool vulkanCommandPool::getUnderlyingCommandPool() const
     {
         return m_commandPool;

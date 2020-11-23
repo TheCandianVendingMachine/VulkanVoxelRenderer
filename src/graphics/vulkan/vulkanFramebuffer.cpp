@@ -41,6 +41,11 @@ void vulkanFramebuffer::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanFramebuffer::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkFramebuffer vulkanFramebuffer::getUnderlyingFrameBuffer() const
     {
         return m_framebuffer;

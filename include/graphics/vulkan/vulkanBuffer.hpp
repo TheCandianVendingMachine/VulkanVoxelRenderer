@@ -19,6 +19,8 @@ class vulkanBuffer
             void create(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VmaMemoryUsage memoryUsage);
             void cleanup();
 
+            bool isCreated() const;
+
             VkBuffer getUnderlyingBuffer() const;
             operator VkBuffer() const;
 

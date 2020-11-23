@@ -38,6 +38,11 @@ void vulkanDescriptorPool::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanDescriptorPool::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkDescriptorPool vulkanDescriptorPool::getUnderlyingDescriptorPool() const
     {
         return m_descriptorPool;

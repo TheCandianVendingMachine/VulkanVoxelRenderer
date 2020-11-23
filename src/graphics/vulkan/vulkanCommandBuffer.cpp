@@ -35,6 +35,11 @@ void vulkanCommandBuffer::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanCommandBuffer::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkCommandBuffer vulkanCommandBuffer::getUnderlyingCommandBuffer() const
     {
         return m_commandBuffer;

@@ -30,6 +30,8 @@ class vulkanSwapChain
             void create(VkDevice device, VkPhysicalDevice physicalDevice, VkSurfaceKHR surface, const GLFWwindow &window);
             void cleanup();
 
+            bool isCreated() const;
+
             const std::vector<vulkanImageView> &getImageViews() const;
             VkExtent2D getExtent() const;
             VkFormat getFormat() const;

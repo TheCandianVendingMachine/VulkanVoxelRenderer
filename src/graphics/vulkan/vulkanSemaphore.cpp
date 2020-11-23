@@ -35,6 +35,11 @@ void vulkanSemaphore::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanSemaphore::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkSemaphore vulkanSemaphore::getUnderlyingSemaphore() const
     {
         return m_semaphore;

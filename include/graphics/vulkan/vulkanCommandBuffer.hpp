@@ -27,6 +27,8 @@ class vulkanCommandBuffer
             void create(VkDevice device, VkCommandPool commandPool, VkCommandBufferLevel level);
             void cleanup();
 
+            bool isCreated() const;
+
             VkCommandBuffer getUnderlyingCommandBuffer() const;
             operator VkCommandBuffer() const;
 

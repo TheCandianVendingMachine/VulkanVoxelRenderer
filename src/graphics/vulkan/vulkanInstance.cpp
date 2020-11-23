@@ -108,6 +108,11 @@ void vulkanInstance::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanInstance::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkInstance vulkanInstance::getUnderlyingInstance() const
     {
         return m_instance;

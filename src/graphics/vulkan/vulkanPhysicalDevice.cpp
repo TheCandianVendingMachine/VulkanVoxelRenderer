@@ -112,6 +112,11 @@ void vulkanPhysicalDevice::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanPhysicalDevice::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkSampleCountFlagBits vulkanPhysicalDevice::getSampleCount() const
     {
         return m_msaaSamples;

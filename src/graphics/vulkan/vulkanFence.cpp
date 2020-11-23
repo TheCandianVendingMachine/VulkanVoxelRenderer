@@ -36,6 +36,11 @@ void vulkanFence::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanFence::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 void vulkanFence::wait()
     {
         vkWaitForFences(m_device, 1, &m_fence, VK_TRUE, UINT64_MAX);

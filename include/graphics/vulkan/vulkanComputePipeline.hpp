@@ -36,6 +36,8 @@ class vulkanComputePipeline
             );
             void cleanup();
 
+            bool isCreated() const;
+
             VkPipeline getUnderlyingPipeline() const;
             operator VkPipeline() const;
 

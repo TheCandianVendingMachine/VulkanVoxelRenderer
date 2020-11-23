@@ -18,6 +18,8 @@ class vulkanSampler
             void create(VkDevice device, float maxLOD, VkSamplerAddressMode samplerMode);
             void cleanup();
 
+            bool isCreated() const;
+
             VkSampler getUnderlyingSampler() const;
             operator VkSampler() const;
 

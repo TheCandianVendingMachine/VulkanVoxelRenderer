@@ -47,6 +47,11 @@ void vulkanSampler::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanSampler::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkSampler vulkanSampler::getUnderlyingSampler() const
     {
         return m_sampler;

@@ -18,6 +18,8 @@ class vulkanFence
             void create(VkDevice device, VkFenceCreateFlags fenceFlags);
             void cleanup();
 
+            bool isCreated() const;
+
             void wait();
 
             VkFence getUnderlyingFence() const;

@@ -19,6 +19,8 @@ class vulkanDescriptorSetLayout
             void create(VkDevice device, const std::vector<VkDescriptorSetLayoutBinding> &layoutBindings);
             void cleanup();
 
+            bool isCreated() const;
+
             VkDescriptorSetLayout getUnderlyingDescriptorSetLayout() const;
             operator VkDescriptorSetLayout() const;
 

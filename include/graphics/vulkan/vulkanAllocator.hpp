@@ -18,6 +18,8 @@ class vulkanAllocator
             void create(VkInstance instance, VkDevice device, VkPhysicalDevice physicalDevice);
             void cleanup();
 
+            bool isCreated() const;
+
             operator VmaAllocator() const;
             VmaAllocator getUnderlyingAllocator() const;
 

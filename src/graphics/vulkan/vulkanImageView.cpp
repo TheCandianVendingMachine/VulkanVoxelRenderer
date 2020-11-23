@@ -41,6 +41,11 @@ void vulkanImageView::cleanup()
         m_cleanedUp = true;
     }
 
+bool vulkanImageView::isCreated() const
+    {
+        return !m_cleanedUp;
+    }
+
 VkImageView vulkanImageView::getUnderlyingImageView() const
     {
         return m_imageView;
