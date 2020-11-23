@@ -8,6 +8,7 @@
 #include "graphics/descriptorSet.hpp"
 #include <vector>
 #include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
 
 class heightmap;
 class renderer;
@@ -41,6 +42,8 @@ class raytracer
             descriptorSet *m_fragDescriptors = nullptr;
 
             uniformBuffer m_groundTerrainDataUBO;
+            uniformBuffer m_heightmapVariablesUBO;
+            uniformBuffer m_shaderVariablesUBO;
 
             struct
                 {
@@ -61,7 +64,7 @@ class raytracer
             struct
                 {
                     int m_groundTextureCount = 0;
-                    alignas(16) glm::vec2 m_heights[c_maxGroundTextures] = {};
+                    glm::vec3 m_heights[c_maxGroundTextures] = {}; // vec3 because for some reason vec2's don't send all the bytes to GPU
                 } m_groundTextureData;
 
             void initComputePipeline(renderer &renderer, heightmap &heightmap, uniformBuffer &viewUBO, uniformBuffer &lightUBO, vulkanImageView &voxelGridView, vulkanImageView &voxelShadowGridView, vulkanSampler &voxelGridSampler, vulkanSampler &voxelShadowGridSampler);
@@ -76,5 +79,5 @@ class raytracer
             void addGroundTexture(const char *filepath, float minHeight, float maxHeight);
 
             void dispatch();
-            void draw();
+            void draw(bool debug);
     };

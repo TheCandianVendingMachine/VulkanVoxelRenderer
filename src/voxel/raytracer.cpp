@@ -4,6 +4,8 @@
 #include "graphics/descriptorSettings.hpp"
 #include "graphics/textureFunctions.hpp"
 
+#include "imgui.h"
+
 void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, uniformBuffer &viewUBO, uniformBuffer &lightUBO, vulkanImageView &voxelGridView, vulkanImageView &voxelShadowGridView, vulkanSampler &voxelGridSampler, vulkanSampler &voxelShadowGridSampler)
     {
         descriptorSettings computeSettings;
@@ -16,21 +18,27 @@ void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, un
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, c_maxGroundTextures); // ground texture samplers
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // ground texture data
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // skybox
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // heightmap variables
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // shader variables
         
         m_computePipelineID = renderer.createComputePipeline(computeSettings, "shaders/voxel_raytracing_gl.spv");
 
         m_groundTerrainDataUBO.createAndBind(m_groundTextureData);
+        m_heightmapVariablesUBO.createAndBind(m_heightmapVariables);
+        m_shaderVariablesUBO.createAndBind(m_shaderVariables);
 
         m_computeDescriptors = renderer.createComputeDescriptorSet(m_computePipelineID);
-        m_computeDescriptors->bindImage(m_renderImageView);
-        m_computeDescriptors->bindUBO(viewUBO.getUniformBuffer(), viewUBO.getBufferSize());
-        m_computeDescriptors->bindUBO(lightUBO.getUniformBuffer(), lightUBO.getBufferSize());
-        m_computeDescriptors->bindImage(voxelGridView, voxelGridSampler);
-        m_computeDescriptors->bindImage(voxelShadowGridView, voxelShadowGridSampler);
-        m_computeDescriptors->bindImage(heightmap.getView(), heightmap.getSampler());
-        m_computeDescriptors->bindImages(m_groundTexturesViews, m_groundTexturesSamplers, m_groundTextureData.m_groundTextureCount);
-        m_computeDescriptors->bindUBO(m_groundTerrainDataUBO.getUniformBuffer(), m_groundTerrainDataUBO.getBufferSize());
-        m_computeDescriptors->bindImage(m_skySphereView, m_skySphereSampler);
+        m_computeDescriptors->bindImage(m_renderImageView, 0);
+        m_computeDescriptors->bindUBO(viewUBO.getUniformBuffer(), viewUBO.getBufferSize(), 1);
+        m_computeDescriptors->bindUBO(lightUBO.getUniformBuffer(), lightUBO.getBufferSize(), 2);
+        m_computeDescriptors->bindImage(voxelGridView, voxelGridSampler, 3);
+        m_computeDescriptors->bindImage(voxelShadowGridView, voxelShadowGridSampler, 4);
+        m_computeDescriptors->bindImage(heightmap.getView(), heightmap.getSampler(), 5);
+        m_computeDescriptors->bindImages(m_groundTexturesViews, m_groundTexturesSamplers, m_groundTextureData.m_groundTextureCount, 6);
+        m_computeDescriptors->bindUBO(m_groundTerrainDataUBO.getUniformBuffer(), m_groundTerrainDataUBO.getBufferSize(), 7);
+        m_computeDescriptors->bindImage(m_skySphereView, m_skySphereSampler, 8);
+        m_computeDescriptors->bindUBO(m_heightmapVariablesUBO.getUniformBuffer(), m_heightmapVariablesUBO.getBufferSize(), 9);
+        m_computeDescriptors->bindUBO(m_shaderVariablesUBO.getUniformBuffer(), m_shaderVariablesUBO.getBufferSize(), 10);
     }
 
 raytracer::raytracer(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, vulkanImageView &voxelGridView, vulkanImageView &voxelShadowGridView, vulkanSampler &voxelGridSampler, vulkanSampler &voxelShadowGridSampler)
@@ -62,7 +70,7 @@ void raytracer::create(renderer &renderer, heightmap &heightmap, glm::ivec2 imag
         renderer.transitionImageLayout(m_finalImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
         m_fragDescriptors = renderer.createDescriptorSet();
-        m_fragDescriptors->bindImage(m_finalImageView, m_finalImageSampler);
+        m_fragDescriptors->bindImage(m_finalImageView, m_finalImageSampler, 0);
 
         m_heightmap = &heightmap;
         m_renderer = &renderer;
@@ -88,6 +96,10 @@ void raytracer::destroy()
         m_finalImageSampler.cleanup();
         m_finalImageView.cleanup();
         m_finalImage.cleanup();
+
+        m_groundTerrainDataUBO.destroy();
+        m_shaderVariablesUBO.destroy();
+        m_heightmapVariablesUBO.destroy();
     }
 
 void raytracer::addGroundTexture(const char *filepath, float minHeight, float maxHeight)
@@ -109,6 +121,7 @@ void raytracer::addGroundTexture(const char *filepath, float minHeight, float ma
         m_groundTextureData.m_groundTextureCount++;
 
         m_groundTerrainDataUBO.bind(m_groundTextureData);
+        m_computeDescriptors->bindImages(m_groundTexturesViews, m_groundTexturesSamplers, m_groundTextureData.m_groundTextureCount, 6);
     }
 
 void raytracer::dispatch()
@@ -120,8 +133,38 @@ void raytracer::dispatch()
         m_renderer->dispatchCompute(m_computePipelineID, m_computeDescriptors, m_imageSize.x / c_computeThreads, m_imageSize.y / c_computeThreads, 1);
     }
 
-void raytracer::draw()
+void raytracer::draw(bool debug)
     {
         m_renderer->blitImage(m_renderImage, VK_IMAGE_LAYOUT_GENERAL, m_finalImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, m_imageSize.x, m_imageSize.y);
         m_renderer->draw(*m_fragDescriptors);
+
+        if (debug)
+            {
+                ImGui::Begin("Raycast Settings");
+
+                ImGui::Text("Shader Variables");
+                bool updateUBO = false;
+                updateUBO |= ImGui::Selectable("Draw Normals", &m_shaderVariables.m_displayNormals);
+                updateUBO |= ImGui::SliderInt("Max Traces", &m_shaderVariables.m_maxTraces, 0, 8);
+                updateUBO |= ImGui::SliderFloat("Normal Epsilon", &m_shaderVariables.m_normalEpsilon, 0.f, 64.f);
+
+                if (updateUBO)
+                    {
+                        m_shaderVariablesUBO.bind(m_shaderVariables);
+                    }
+                updateUBO = false;
+                ImGui::NewLine();
+                ImGui::Text("Heightmap Raymarch Variables");
+                updateUBO |= ImGui::SliderInt("Min Check Distance", &m_heightmapVariables.m_minCheckDistance, 1, 100);
+                updateUBO |= ImGui::SliderFloat("March Increment", &m_heightmapVariables.m_tIncrement, 0.1f, 10.f);
+                updateUBO |= ImGui::SliderFloat("Min Ray Distance", &m_heightmapVariables.m_minT, 0.01f, 5.f);
+                updateUBO |= ImGui::SliderFloat("Max Ray Distance", &m_heightmapVariables.m_maxT, 1.f, 50000.f, "%.3f", 2.f);
+                updateUBO |= ImGui::SliderFloat("Soft Shadow Scale", &m_heightmapVariables.m_softShadowScale, 0.01f, 256.f);
+                if (updateUBO)
+                    {
+                        m_heightmapVariablesUBO.bind(m_heightmapVariables);
+                    }
+
+                ImGui::End();
+            }
     }

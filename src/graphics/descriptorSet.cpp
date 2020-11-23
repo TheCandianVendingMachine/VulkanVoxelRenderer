@@ -5,7 +5,14 @@
 #include "graphics/vulkan/vulkanSampler.hpp"
 #include "graphics/vulkan/vulkanBuffer.hpp"
 #include "graphics/descriptorSettings.hpp"
-#include <array>
+#include <algorithm>
+
+void descriptorSet::sortBindings()
+    {
+        std::sort(m_bindings.begin(), m_bindings.end(), [](const metaInfo &a, const metaInfo &b){
+            return a.binding < b.binding;
+        });
+    }
 
 void descriptorSet::create(unsigned int swapChainImageCount, vulkanDevice &device, vulkanDescriptorPool &descriptorPool, std::vector<VkDescriptorSetLayout> &layouts, const descriptorSettings &settings)
     {
@@ -23,7 +30,7 @@ void descriptorSet::cleanup()
             }
     }
 
-void descriptorSet::bindImage(const vulkanImageView &imageView, const vulkanSampler &imageSampler)
+void descriptorSet::bindImage(const vulkanImageView &imageView, const vulkanSampler &imageSampler, int binding)
     {
         VkDescriptorImageInfo newInfo{};
 
@@ -31,14 +38,26 @@ void descriptorSet::bindImage(const vulkanImageView &imageView, const vulkanSamp
         newInfo.imageView = imageView;
         newInfo.sampler = imageSampler;
 
-        m_imageInfo.emplace_back(newInfo);
+        if (binding >= m_bindings.size())
+            {
+                m_bindings.emplace_back(binding);
+                sortBindings();
+            }
+
+        m_bindings[binding].imageInfo.m_imageInfo = { newInfo };
 
         m_needsUpdate = true;
     }
 
-void descriptorSet::bindImages(const vulkanImageView *imageViews, const vulkanSampler *imageSamplers, int count)
+void descriptorSet::bindImages(const vulkanImageView *imageViews, const vulkanSampler *imageSamplers, int count, int binding)
     {
-        m_imageInfo.emplace_back();
+        if (binding >= m_bindings.size())
+            {
+                m_bindings.emplace_back(binding);
+                sortBindings();
+            }
+        m_bindings[binding].imageInfo.m_imageInfo.clear();
+        
         for (int i = 0; i < count; i++)
             {
                 VkDescriptorImageInfo newInfo{};
@@ -46,25 +65,30 @@ void descriptorSet::bindImages(const vulkanImageView *imageViews, const vulkanSa
                 newInfo.imageView = imageViews[i];
                 newInfo.sampler = imageSamplers[i];
 
-                m_imageInfo.back().m_imageInfo.push_back(newInfo);
+                m_bindings[binding].imageInfo.m_imageInfo.push_back(newInfo);
             }
 
         m_needsUpdate = true;
     }
 
-void descriptorSet::bindImage(const vulkanImageView &imageView)
+void descriptorSet::bindImage(const vulkanImageView &imageView, int binding)
     {
         VkDescriptorImageInfo newInfo{};
 
         newInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         newInfo.imageView = imageView;
 
-        m_imageInfo.emplace_back(newInfo);
+        if (binding >= m_bindings.size())
+            {
+                m_bindings.emplace_back(binding);
+                sortBindings();
+            }
+        m_bindings[binding].imageInfo.m_imageInfo = { newInfo };
 
         m_needsUpdate = true;
     }
 
-void descriptorSet::bindUBO(const vulkanBuffer &buffer, VkDeviceSize range)
+void descriptorSet::bindUBO(const vulkanBuffer &buffer, VkDeviceSize range, int binding)
     {
         VkDescriptorBufferInfo newInfo{};
 
@@ -72,12 +96,17 @@ void descriptorSet::bindUBO(const vulkanBuffer &buffer, VkDeviceSize range)
         newInfo.offset = 0;
         newInfo.range = range;
 
-        m_bufferInfo.push_back(newInfo);
-        
+        if (binding >= m_bindings.size())
+            {
+                m_bindings.emplace_back(binding);
+                sortBindings();
+            }
+        m_bindings[binding].bufferInfo.m_bufferInfo = { newInfo };
+
         m_needsUpdate = true;
     }
 
-void descriptorSet::bindSBO(const vulkanBuffer &buffer, VkDeviceSize range)
+void descriptorSet::bindSBO(const vulkanBuffer &buffer, VkDeviceSize range, int binding)
     {
         VkDescriptorBufferInfo newInfo{};
 
@@ -85,21 +114,26 @@ void descriptorSet::bindSBO(const vulkanBuffer &buffer, VkDeviceSize range)
         newInfo.offset = 0;
         newInfo.range = range;
 
-        m_bufferInfo.push_back(newInfo);
-        
+        if (binding >= m_bindings.size())
+            {
+                m_bindings.emplace_back(binding);
+                sortBindings();
+            }
+        m_bindings[binding].bufferInfo.m_bufferInfo = { newInfo };
+
         m_needsUpdate = true;
     }
 
 void descriptorSet::update()
     {
         // to add more descriptor sets you have to add them in descriptorHandler too
+
         for (unsigned int i = 0; i < m_descriptorSets.size(); i++)
             {
                 VkDescriptorSet descriptorSet = m_descriptorSets[i];
 
                 std::vector<VkWriteDescriptorSet> descriptorWrites = m_settings->getDescriptorWrites();
-                unsigned int bufferIndex = 0;
-                unsigned int imageIndex = 0;
+                unsigned int binding = 0;
                 for (auto &write : descriptorWrites)
                     {
                         write.dstSet = descriptorSet;
@@ -107,18 +141,23 @@ void descriptorSet::update()
                             {
                                 case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
                                 case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-                                    write.pBufferInfo = &m_bufferInfo[bufferIndex++];
+                                    write.descriptorCount = m_bindings[binding].bufferInfo.m_bufferInfo.size();
+                                    write.pBufferInfo = m_bindings[binding].bufferInfo.m_bufferInfo.data();
+
+                                    binding++;
                                     break;
                                 case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-                                    for (auto &imageInfo : m_imageInfo[imageIndex].m_imageInfo)
+                                    for (auto &imageInfo : m_bindings[binding].imageInfo.m_imageInfo)
                                         {
                                             imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
                                         }
                                     [[fallthrough]];
                                 case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
                                 case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-                                    write.descriptorCount = m_imageInfo[imageIndex].m_imageInfo.size();
-                                    write.pImageInfo = m_imageInfo[imageIndex++].m_imageInfo.data();
+                                    write.descriptorCount = m_bindings[binding].imageInfo.m_imageInfo.size();
+                                    write.pImageInfo = m_bindings[binding].imageInfo.m_imageInfo.data();
+
+                                    binding++;
                                     break;
                                 default:
                                     break;

@@ -376,7 +376,7 @@ int main()
                             }
                     }
 
-                ImGui::Begin("Raycast Settings");
+                ImGui::Begin("Camera");
                 bool slid = false;
                 slid |= ImGui::SliderFloat("Light Direction X", &light.m_direction.x, -1.f, 1.f);
                 slid |= ImGui::SliderFloat("Light Direction Y", &light.m_direction.y, -1.f, 1.f);
@@ -435,7 +435,7 @@ int main()
                     }*/
 
                 raytracer.dispatch();
-                raytracer.draw();
+                raytracer.draw(true);
 
                 renderer.preRecording();
                 renderer.recordCommandBuffer();

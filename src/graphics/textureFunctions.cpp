@@ -9,7 +9,10 @@ textureData loadTexture(const char *filepath, vulkanImage &image, renderer &rend
         textureData textureData;
         stbi_uc *m_pixelData = stbi_load(filepath, &textureData.width, &textureData.height, &textureData.channels, STBI_rgb_alpha);
 
-        image.create(textureData.width, textureData.height, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_IMAGE_TYPE_2D);
+        if (!image.isCreated())
+            {
+                image.create(textureData.width, textureData.height, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VK_IMAGE_TYPE_2D);
+            }
 
         unsigned int imageSize = textureData.width * textureData.height * 4;
         vulkanBuffer buffer;

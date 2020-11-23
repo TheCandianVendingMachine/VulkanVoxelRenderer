@@ -26,13 +26,23 @@ layout(binding = 7) uniform groundTextureDataUBO {
 
 layout(binding = 8) uniform sampler2D skybox;
 
+layout(binding = 9) uniform heightmapRenderVariablesUBO {
+    int minCheckDistance;
+    float minT;
+    float maxT;
+    float tIncrement;
+    float softShadowScale;
+} heightmapVariables;
+
+layout(binding = 10) uniform shaderVariablesUBO {
+    int maxTraces;
+    float normalEpsilon;
+    bool displayNormals;
+} shaderVariables;
+
 const float PI = 3.14159265354f;
 const float INF = 1e10;
 const float EPSILON = 0.001f;
-
-const bool DISPLAY_NORMALS = false;
-const float NORMAL_EPSILON = 16.f;
-const int MAX_TRACES = 3;
 
 struct ray
 {
@@ -256,38 +266,32 @@ float getDistanceToHeightmap(vec3 position)
 
 void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
 {
-    const float minT = 0.05f;
-    const float maxT = 25000.f;
-    const float tInc = 2.f;
-    const int checkDistance = 15;
-
     vec2 heightmapSize = textureSize(heightmap, 0);
     float previousDistance = bestHit.distance;
 
     float res = 1.f;
 
-    const float k = 128;
     float t = 0.f;
     float dt;
     for (int i = 0; i < 500; i++)
     {
-        dt = getDistanceToTerrain(r.origin + t * r.direction, r.direction, checkDistance, heightmapSize, minT, tInc, res, k);
+        dt = getDistanceToTerrain(r.origin + t * r.direction, r.direction, heightmapVariables.minCheckDistance, heightmapSize, heightmapVariables.minT, heightmapVariables.tIncrement, res, heightmapVariables.softShadowScale);
 
-        res = min(res, k * dt / t);
-        if (dt < minT || t > maxT) { break; }
+        res = min(res, heightmapVariables.softShadowScale * dt / t);
+        if (dt < heightmapVariables.minT || t > heightmapVariables.maxT) { break; }
         t += dt;
     }
 
-    if (dt < minT && t < previousDistance)
+    if (dt < heightmapVariables.minT && t < previousDistance)
     {
         // hit
         // thanks Inigo Quilez https://www.iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
         vec3 rayPosition = r.origin + t * r.direction;
 
-        const vec2 h = vec2(NORMAL_EPSILON, 0);
+        const vec2 h = vec2(shaderVariables.normalEpsilon.x, 0);
         vec3 normal = normalize(vec3(
             getTerrainHeightAt(rayPosition.xz - h.xy, heightmapSize) - getTerrainHeightAt(rayPosition.xz + h.xy, heightmapSize),
-            2.f * NORMAL_EPSILON,
+            2.f * shaderVariables.normalEpsilon.x,
             getTerrainHeightAt(rayPosition.xz - h.yx, heightmapSize) - getTerrainHeightAt(rayPosition.xz + h.yx, heightmapSize)
         ));
 
@@ -298,7 +302,7 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
         bestHit.albedo = normal;
         bestHit.shadow = max(res, 0.06f);
 
-        if (DISPLAY_NORMALS)
+        if (shaderVariables.displayNormals)
         {
             return;
         }
@@ -528,7 +532,7 @@ void main()
     ray r = createCameraRay(uv);
    
     vec4 shadeResult = vec4(0, 0, 0, 1.f);
-    for (int i = 0; i < MAX_TRACES; i++)
+    for (int i = 0; i < shaderVariables.maxTraces; i++)
     {
         rayHit hit = trace(r, false);
         shadeResult.rgb += r.energy * shade(r, hit);
