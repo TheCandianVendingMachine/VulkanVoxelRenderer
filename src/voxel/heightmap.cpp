@@ -88,11 +88,8 @@ vulkanSampler &heightmap::getSampler()
 
 float heightmap::getHeight(glm::vec3 position)
     {
-        const int a = 16;
-        const int b = a * 64;
-
         glm::vec2 mapPos(position.x, position.z);
-        mapPos /= a;
+        mapPos /= m_mapWidthScale;
 
         if (mapPos.x < 0.f || mapPos.x >= m_size.x) { return 0.f; }
         if (mapPos.y < 0.f || mapPos.y >= m_size.y) { return 0.f; }
@@ -103,5 +100,5 @@ float heightmap::getHeight(glm::vec3 position)
         unsigned char pixel = *(m_pixelData + offset);
 
         // desmos provided these numbers, pure magic
-        return (static_cast<float>(pixel) / 255.f) * b;
+        return (static_cast<float>(pixel) / 255.f) * m_mapWidthScale * m_mapHeightScale;
     }

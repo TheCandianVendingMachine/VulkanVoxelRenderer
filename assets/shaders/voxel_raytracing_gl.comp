@@ -48,6 +48,7 @@ struct rayHit
     vec3 albedo;
     vec3 specular;
     float distance;
+    float shadow;
 };
 
 float saturate(float value)
@@ -63,6 +64,7 @@ rayHit createRayHit()
     rh.albedo = vec3(0.0f);
     rh.specular = vec3(0.0f);
     rh.distance = INF;
+    rh.shadow = 1.f;
     return rh;
 }
 
@@ -225,13 +227,15 @@ float getDistanceToHeightmap(vec3 position, vec2 heightmapPosition, const vec2 h
     return distance(position, vec3(heightmapPosition.x, height, heightmapPosition.y)) - height;
 }
 
-float getDistanceToTerrain(vec3 position, vec3 direction, vec2 heightmapPosition, const int minDistance, const vec2 heightmapSize, const float minT, const float dt)
+float getDistanceToTerrain(vec3 position, vec3 direction, const int minDistance, const vec2 heightmapSize, const float minT, const float dt, inout float res, const float k)
 {
-    float u = getDistanceToHeightmap(position, heightmapPosition, heightmapSize);
+    float u = getDistanceToHeightmap(position, position.xz, heightmapSize);
     if (u <= minDistance)
     {
         for (u = 0.f; u < minDistance; u += dt)
         {
+            res = min(res, k * dt / u);
+
             position += direction * dt;
             float height = getTerrainHeightAt(position.xz, heightmapSize);
             if (position.y - height < minT)
@@ -241,6 +245,7 @@ float getDistanceToTerrain(vec3 position, vec3 direction, vec2 heightmapPosition
         }
     }
 
+    res = min(res, k * dt / u);
     return u;
 }
 
@@ -253,22 +258,23 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
 {
     const float minT = 0.05f;
     const float maxT = 25000.f;
-    const float tInc = 1.f;
+    const float tInc = 2.f;
     const int checkDistance = 15;
 
     vec2 heightmapSize = textureSize(heightmap, 0);
-    vec3 rayPosition = r.origin;
-
     float previousDistance = bestHit.distance;
 
+    float res = 1.f;
+
+    const float k = 128;
     float t = 0.f;
     float dt;
     for (int i = 0; i < 500; i++)
     {
-        dt = getDistanceToTerrain(rayPosition, r.direction, rayPosition.xz, checkDistance, heightmapSize, minT, tInc);
+        dt = getDistanceToTerrain(r.origin + t * r.direction, r.direction, checkDistance, heightmapSize, minT, tInc, res, k);
 
+        res = min(res, k * dt / t);
         if (dt < minT || t > maxT) { break; }
-        rayPosition = rayPosition + dt * r.direction;
         t += dt;
     }
 
@@ -276,6 +282,8 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
     {
         // hit
         // thanks Inigo Quilez https://www.iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
+        vec3 rayPosition = r.origin + t * r.direction;
+
         const vec2 h = vec2(NORMAL_EPSILON, 0);
         vec3 normal = normalize(vec3(
             getTerrainHeightAt(rayPosition.xz - h.xy, heightmapSize) - getTerrainHeightAt(rayPosition.xz + h.xy, heightmapSize),
@@ -288,6 +296,7 @@ void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
         bestHit.normal = normal;
         bestHit.specular = vec3(0.01f);
         bestHit.albedo = normal;
+        bestHit.shadow = max(res, 0.06f);
 
         if (DISPLAY_NORMALS)
         {
@@ -498,12 +507,8 @@ vec3 shade(inout ray r, rayHit hit)
         
         ray shadowRay = createRay(hit.position + hit.normal * EPSILON, -light.direction);
         rayHit shadowHit = trace(shadowRay, true);
-        if (shadowHit.distance != INF)
-        {
-            return saturate(-dot(hit.normal, light.direction)) * light.intensity.x * hit.albedo * 0.1f;
-        }
 
-        return saturate(-dot(hit.normal, light.direction)) * light.intensity.x * hit.albedo;
+        return saturate(-dot(hit.normal, light.direction)) * light.intensity.x * hit.albedo * shadowHit.shadow;
     }
     else
     {   

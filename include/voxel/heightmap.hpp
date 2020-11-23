@@ -16,6 +16,9 @@ class heightmap
             int m_channels = 0;
             glm::ivec2 m_size;
 
+            int m_mapWidthScale = 16; // x Meters / 1 Resolution
+            int m_mapHeightScale = 64; // x Meters / 1 Meter
+
             alignas(16) vulkanImage m_heightmap;
             vulkanImageView m_heightmapView;
             vulkanSampler m_heightmapSampler;

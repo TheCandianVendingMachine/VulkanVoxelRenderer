@@ -40,14 +40,14 @@ void descriptorSet::bindImages(const vulkanImageView *imageViews, const vulkanSa
     {
         m_imageInfo.emplace_back();
         for (int i = 0; i < count; i++)
-        {
-            VkDescriptorImageInfo newInfo{};
-            newInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            newInfo.imageView = imageViews[i];
-            newInfo.sampler = imageSamplers[i];
+            {
+                VkDescriptorImageInfo newInfo{};
+                newInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                newInfo.imageView = imageViews[i];
+                newInfo.sampler = imageSamplers[i];
 
-            m_imageInfo.back().m_imageInfo.push_back(newInfo);
-        }
+                m_imageInfo.back().m_imageInfo.push_back(newInfo);
+            }
 
         m_needsUpdate = true;
     }

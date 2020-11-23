@@ -26,6 +26,10 @@ class uniformBuffer
             void create(T *value);
             template<typename T>
             void create(T &value);
+            template<typename T>
+            void createAndBind(T *value);
+            template<typename T>
+            void createAndBind(T &value);
             void destroy();
             
             template<typename T>
@@ -64,6 +68,20 @@ inline void uniformBuffer::create(T &value)
     {
         create(sizeof(T));
         bind(&value);
+    }
+
+template<typename T>
+inline void uniformBuffer::createAndBind(T *value)
+    {
+        create(value);
+        bind(value);
+    }
+
+template<typename T>
+inline void uniformBuffer::createAndBind(T &value)
+    {
+        create(value);
+        bind(value);
     }
 
 template<typename T>
