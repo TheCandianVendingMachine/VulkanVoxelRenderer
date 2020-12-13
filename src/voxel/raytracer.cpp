@@ -21,12 +21,14 @@ void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, un
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // skybox
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // heightmap variables
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // shader variables
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // grid variables
         
         m_computePipelineID = renderer.createComputePipeline(computeSettings, "shaders/voxel_raytracing_gl.spv");
 
         m_groundTerrainDataUBO.createAndBind(m_groundTextureData);
         m_heightmapVariablesUBO.createAndBind(m_heightmapVariables);
         m_shaderVariablesUBO.createAndBind(m_shaderVariables);
+        m_gridVariablesUBO.createAndBind(m_gridVariables);
 
         m_computeDescriptors = renderer.createComputeDescriptorSet(m_computePipelineID);
         m_computeDescriptors->bindImage(m_renderImageView, 0);
@@ -40,6 +42,7 @@ void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, un
         m_computeDescriptors->bindImage(m_skySphereView, m_skySphereSampler, 8);
         m_computeDescriptors->bindUBO(m_heightmapVariablesUBO.getUniformBuffer(), m_heightmapVariablesUBO.getBufferSize(), 9);
         m_computeDescriptors->bindUBO(m_shaderVariablesUBO.getUniformBuffer(), m_shaderVariablesUBO.getBufferSize(), 10);
+        m_computeDescriptors->bindUBO(m_gridVariablesUBO.getUniformBuffer(), m_gridVariablesUBO.getBufferSize(), 11);
     }
 
 raytracer::raytracer(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, voxelGrid &grid)
@@ -101,6 +104,7 @@ void raytracer::destroy()
         m_groundTerrainDataUBO.destroy();
         m_shaderVariablesUBO.destroy();
         m_heightmapVariablesUBO.destroy();
+        m_gridVariablesUBO.destroy();
     }
 
 void raytracer::addGroundTexture(const char *filepath, float minHeight, float maxHeight)
@@ -147,7 +151,7 @@ void raytracer::draw(bool debug)
                 bool updateUBO = false;
                 updateUBO |= ImGui::Selectable("Draw Normals", &m_shaderVariables.m_displayNormals);
                 updateUBO |= ImGui::SliderInt("Max Traces", &m_shaderVariables.m_maxTraces, 0, 8);
-                updateUBO |= ImGui::SliderFloat("Normal Epsilon", &m_shaderVariables.m_normalEpsilon, 0.0001f, 64.f);
+                updateUBO |= ImGui::SliderFloat("Normal Epsilon", &m_shaderVariables.m_normalEpsilon, 0.001f, 64.f);
 
                 if (updateUBO)
                     {
@@ -164,6 +168,15 @@ void raytracer::draw(bool debug)
                 if (updateUBO)
                     {
                         m_heightmapVariablesUBO.bind(m_heightmapVariables);
+                    }
+
+                updateUBO = false;
+                ImGui::NewLine();
+                ImGui::Text("Grid Variables");
+                updateUBO |= ImGui::SliderInt("MIP level", &m_gridVariables.m_mip, 0, voxelGrid::c_maxDepth);
+                if (updateUBO)
+                    {
+                        m_gridVariablesUBO.bind(m_gridVariables);
                     }
 
                 ImGui::End();

@@ -40,6 +40,10 @@ layout(binding = 10) uniform shaderVariablesUBO {
     bool displayNormals;
 } shaderVariables;
 
+layout(binding = 11) uniform gridVariablesUBO {
+    int mip;
+} gridVariables;
+
 const float PI = 3.14159265354f;
 const float INF = 1e10;
 const float EPSILON = 0.001f;
@@ -468,7 +472,7 @@ void traverseOctree(ray r, inout rayHit bestHit, uint depth)
 
 void traverseGrid(ray r, inout rayHit bestHit, uint depth, const vec3 gridPosition, const bool shadowTrace)
 {
-    const ivec3 gridSize = ivec3(256, 256, 256);
+    const ivec3 gridSize = ivec3(128, 128, 128);
     const float voxelSize = 1.f;
 
     if (!intersectCube(r, gridPosition + (gridSize / 2), gridSize / 2, true, false, 1.f / r.direction))
@@ -487,23 +491,25 @@ void traverseGrid(ray r, inout rayHit bestHit, uint depth, const vec3 gridPositi
             workingRayOrigin = workingRayOrigin + r.direction * (distance + EPSILON);
         }
     }
-    ivec3 mapPosition = ivec3(floor(workingRayOrigin - gridPosition));
+    // todo: use mipmap to act as quadtree
+    int divisor = 1 << gridVariables.mip;
+
+    vec3 localRayOrigin = (workingRayOrigin - gridPosition) / divisor;
+    ivec3 mapPosition = ivec3(floor(localRayOrigin));
     ivec3 rayStep = ivec3(sign(r.direction));
 
     vec3 deltaDist = abs(vec3(length(r.direction)) / r.direction);
-    vec3 sideDist = (sign(r.direction) * (vec3(mapPosition) - (workingRayOrigin - gridPosition)) + (sign(r.direction) * 0.5) + 0.5) * deltaDist;
+    vec3 sideDist = (sign(r.direction) * (vec3(mapPosition) - localRayOrigin) + (sign(r.direction) * 0.5) + 0.5) * deltaDist;
 
-    const int mip = 0;
-    const int divisor = 2 << mip;
     while (true)
     {
-        if (any(lessThan(mapPosition, ivec3(0))) || any(greaterThanEqual(mapPosition, gridSize)))
+        if (any(lessThan(mapPosition, ivec3(0))) || any(greaterThanEqual(mapPosition, gridSize / divisor)))
         {
             // outside grid, return immediately
             return;
         }
 
-        bool hitTexel = any(greaterThan(texelFetch(voxels, mapPosition / 1, 0).rgb, vec3(0)));
+        bool hitTexel = any(greaterThan(texelFetch(voxels, mapPosition, gridVariables.mip).rgb, vec3(0)));
         if (hitTexel)
         {
             // handle outside of loop
@@ -536,7 +542,7 @@ void traverseGrid(ray r, inout rayHit bestHit, uint depth, const vec3 gridPositi
 rayHit trace(ray r, const bool shadowTrace)
 {
     rayHit bestHit = createRayHit();
-    //traverseTerrain(r, bestHit, shadowTrace);
+    traverseTerrain(r, bestHit, shadowTrace);
     traverseGrid(r, bestHit, 3, vec3(1500.f, 500.f, 1500.f), shadowTrace);
 
     return bestHit;

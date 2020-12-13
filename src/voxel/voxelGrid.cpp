@@ -377,14 +377,13 @@ void voxelGrid::bakeImage(renderer &renderer)
 
 bool voxelGrid::rayIntersects(glm::vec3 rayOrigin, glm::vec3 direction)
     {
-        const glm::ivec3 gridSize = glm::vec3(256, 256, 256);
         const float voxelSize = 1.f;
         const glm::vec3 gridPosition = glm::vec3(1500.f, 500.f, 1500.f);
 
         // find point grid enters grid and set origin to adjacent voxel
         glm::vec3 workingRayOrigin = rayOrigin;
         {
-            glm::vec3 q = glm::abs(workingRayOrigin - gridPosition) - glm::vec3(gridSize);
+            glm::vec3 q = glm::abs(workingRayOrigin - gridPosition) - glm::vec3(m_size);
             float distanceToGrid = glm::length(glm::max(q, 0.f)) + glm::min(glm::max(glm::max(q.x, q.y), q.z), 0.f);
 
             if (distanceToGrid > 0.f)
@@ -407,7 +406,7 @@ bool voxelGrid::rayIntersects(glm::vec3 rayOrigin, glm::vec3 direction)
                 origin += step * glm::ivec3(xCond, yCond, zCond);
                 tMax += tDelta * glm::vec3(xCond, yCond, zCond);
 
-                if (glm::any(glm::lessThan(origin, glm::ivec3(0))) || glm::any(glm::greaterThanEqual(origin, gridSize)))
+                if (glm::any(glm::lessThan(origin, glm::ivec3(0))) || glm::any(glm::greaterThanEqual(origin, glm::ivec3(m_size))))
                 {
                     // outside grid, return immediately
                     return false;

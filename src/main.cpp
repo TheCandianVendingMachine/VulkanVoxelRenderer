@@ -146,16 +146,12 @@ int main()
         renderer renderer(app, settings);
         renderer.initImGui(app);
 
-        voxelGrid testGrid({ 256, 256, 256 }, renderer);
+        voxelGrid testGrid({ 128, 128, 128 }, renderer);
         //testGrid.load("testVoxelGrid.txt");
 
-        testGrid.add({ 0, 0, 0 }, voxel{ rgb.r, rgb.g, rgb.b });
-        testGrid.add({ 50, 52, 20 }, voxel{ rgb.r, rgb.g, rgb.b });
-        testGrid.add({ 1, 1, 200 }, voxel{ rgb.r, rgb.g, rgb.b });
-        testGrid.add({ 200, 200, 200 }, voxel{ rgb.r, rgb.g, rgb.b });
-        for (int i = 0; i < 1000; i++)
+        for (int i = 0; i < 5000; i++)
             {
-                testGrid.add({ rng.generate(0, 255), rng.generate(0, 255), rng.generate(0, 255) }, voxel{ rgb.r, rgb.g, rgb.b });
+                testGrid.add({ rng.generate(0, 127), rng.generate(0, 127), rng.generate(0, 127) }, voxel{ rgb.r, rgb.g, rgb.b });
             }
 
         testGrid.init(renderer);

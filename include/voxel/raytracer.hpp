@@ -6,6 +6,7 @@
 #include "graphics/vulkan/vulkanImageView.hpp"
 #include "graphics/uniformBuffer.hpp"
 #include "graphics/descriptorSet.hpp"
+#include "voxel/voxelGrid.hpp"
 #include <vector>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -45,6 +46,7 @@ class raytracer
             uniformBuffer m_groundTerrainDataUBO;
             uniformBuffer m_heightmapVariablesUBO;
             uniformBuffer m_shaderVariablesUBO;
+            uniformBuffer m_gridVariablesUBO;
 
             struct
                 {
@@ -61,6 +63,11 @@ class raytracer
                     float m_tIncrement = 2.f;
                     float m_softShadowScale = 128.f;
                 } m_heightmapVariables;
+
+            struct
+                {
+                    int m_mip = 0;
+                } m_gridVariables;
 
             struct
                 {

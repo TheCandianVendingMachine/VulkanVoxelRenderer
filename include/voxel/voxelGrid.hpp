@@ -37,7 +37,7 @@ class voxelGrid
             std::vector<voxel> m_voxels;
             sizeTypeVec m_size;
 
-            static constexpr unsigned int c_maxDepth = 8;
+            static constexpr unsigned int c_maxDepth = 7;
             sparseVoxelOctree m_octree;
 
             std::vector<floatVoxel> m_gpuVoxels;
