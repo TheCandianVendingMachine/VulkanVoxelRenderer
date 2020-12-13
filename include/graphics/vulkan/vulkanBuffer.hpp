@@ -14,9 +14,9 @@ class vulkanBuffer
 
         public:
             vulkanBuffer() = default;
-            vulkanBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VmaMemoryUsage memoryUsage);
+            vulkanBuffer(VkDeviceSize bytes, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VmaMemoryUsage memoryUsage);
             ~vulkanBuffer();
-            void create(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VmaMemoryUsage memoryUsage);
+            void create(VkDeviceSize bytes, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VmaMemoryUsage memoryUsage);
             void cleanup();
 
             bool isCreated() const;

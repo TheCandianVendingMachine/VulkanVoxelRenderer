@@ -11,6 +11,7 @@
 #include <glm/vec3.hpp>
 
 class heightmap;
+class voxelGrid;
 class renderer;
 class raytracer
     {
@@ -67,13 +68,13 @@ class raytracer
                     glm::vec3 m_heights[c_maxGroundTextures] = {}; // vec3 because for some reason vec2's don't send all the bytes to GPU
                 } m_groundTextureData;
 
-            void initComputePipeline(renderer &renderer, heightmap &heightmap, uniformBuffer &viewUBO, uniformBuffer &lightUBO, vulkanImageView &voxelGridView, vulkanImageView &voxelShadowGridView, vulkanSampler &voxelGridSampler, vulkanSampler &voxelShadowGridSampler);
+            void initComputePipeline(renderer &renderer, heightmap &heightmap, uniformBuffer &viewUBO, uniformBuffer &lightUBO, voxelGrid &grid);
 
         public:
             raytracer() = default;
-            raytracer(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, vulkanImageView &voxelGridView, vulkanImageView &voxelShadowGridView, vulkanSampler &voxelGridSampler, vulkanSampler &voxelShadowGridSampler);
+            raytracer(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, voxelGrid &grid);
             ~raytracer();
-            void create(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, vulkanImageView &voxelGridView, vulkanImageView &voxelShadowGridView, vulkanSampler &voxelGridSampler, vulkanSampler &voxelShadowGridSampler);
+            void create(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, voxelGrid &grid);
             void destroy();
 
             void addGroundTexture(const char *filepath, float minHeight, float maxHeight);

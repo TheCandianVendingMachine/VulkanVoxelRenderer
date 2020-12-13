@@ -158,9 +158,45 @@ bool intersectCube(ray r, out float distance, out vec3 normal, vec3 cubeCentre, 
     return (sign.x != 0) || (sign.y != 0) || (sign.z != 0);
 }
 
+bool intersectCube(ray r, vec3 cubeCentre, vec3 cubeRadius, const bool canStartInBox, const in bool oriented, in vec3 _invRayDir)
+{
+    float boxRot = 1.f;
+    r.origin = r.origin - cubeCentre;
+    
+    if (oriented)
+    {
+        r.direction *= boxRot;
+        r.origin *= boxRot;
+    }
+
+    float winding = canStartInBox && (maxVec(abs(r.origin) * (1.f / cubeRadius)) < 1.f) ? -1 : 1;
+    vec3 sign = -sign(r.direction);
+    vec3 distanceVec = cubeRadius * winding * sign - r.origin;
+
+    if (oriented) 
+    {
+        distanceVec /= r.direction;
+    }
+    else
+    {
+        distanceVec *= _invRayDir;
+    }
+
+    #define TEST(U, VW) (distanceVec.U >= 0.f) && all(lessThan(abs(r.origin.VW + r.direction.VW * distanceVec.U), cubeRadius.VW))
+    bvec3 test = bvec3(TEST(x, yz), TEST(y, zx), TEST(z, xy));
+    sign = test.x ? vec3(sign.x, 0.f, 0.f) : (test.y ? vec3(0.f, sign.y, 0.f) : vec3(0.f, 0.f, test.z ? sign.z : 0.f));
+    #undef TEST
+
+    return (sign.x != 0) || (sign.y != 0) || (sign.z != 0);
+}
+
 float getOrientedCubeNormalAndDistance(ray r, out float distance, out vec3 normal, vec3 cubeCentre, vec3 cubeRadius, in vec3 _invRayDir)
 {
+    float boxRot = 1.f;
     r.origin = r.origin - cubeCentre;
+    
+    r.direction *= boxRot;
+    r.origin *= boxRot;
 
     vec3 sign = -sign(r.direction);
     vec3 distanceVec = cubeRadius * sign - r.origin;
@@ -173,8 +209,29 @@ float getOrientedCubeNormalAndDistance(ray r, out float distance, out vec3 norma
     #undef TEST
 
     distance = (sign.x != 0) ? distanceVec.x : ((sign.y != 0) ? distanceVec.y : distanceVec.z);
-    normal = sign;
+    normal = boxRot * sign;
     return distance;
+}
+
+float getOrientedCubeDistance(ray r, vec3 cubeCentre, vec3 cubeRadius, in vec3 _invRayDir)
+{
+    float boxRot = 1.f;
+    r.origin = r.origin - cubeCentre;
+
+    r.direction *= boxRot;
+    r.origin *= boxRot;
+
+    vec3 sign = -sign(r.direction);
+    vec3 distanceVec = cubeRadius * sign - r.origin;
+
+    distanceVec *= _invRayDir;
+
+    #define TEST(U, VW) (distanceVec.U >= 0.f) && all(lessThan(abs(r.origin.VW + r.direction.VW * distanceVec.U), cubeRadius.VW))
+    bvec3 test = bvec3(TEST(x, yz), TEST(y, zx), TEST(z, xy));
+    sign = test.x ? vec3(sign.x, 0.f, 0.f) : (test.y ? vec3(0.f, sign.y, 0.f) : vec3(0.f, 0.f, test.z ? sign.z : 0.f));
+    #undef TEST
+
+    return (sign.x != 0) ? distanceVec.x : ((sign.y != 0) ? distanceVec.y : distanceVec.z);
 }
 
 // thanks Inigo Quilez https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
@@ -212,6 +269,12 @@ float opSmoothIntersection(float d1, float d2, float k)
     return mix(d2, d1, h) + k * h * (1.f - h);
 }
 
+float signedDistanceBox(vec3 position, vec3 boxPosition, vec3 boxDimensions)
+{
+    vec3 q = abs(position - boxPosition) - boxDimensions;
+    return length(max(q, 0.0)) + min(max(max(q.x, q.y), q.z), 0.0);
+}
+
 float signedDistanceSphere(vec3 position, vec3 spherePosition, float sphereRadius)
 {
     return distance(position, spherePosition) - sphereRadius;
@@ -237,6 +300,11 @@ float getDistanceToHeightmap(vec3 position, vec2 heightmapPosition, const vec2 h
     return distance(position, vec3(heightmapPosition.x, height, heightmapPosition.y)) - height;
 }
 
+float getDistanceToHeightmap(vec3 position)
+{
+    return getDistanceToHeightmap(position, position.xz, vec2(textureSize(heightmap, 0)));  
+}
+
 float getDistanceToTerrain(vec3 position, vec3 direction, const int minDistance, const vec2 heightmapSize, const float minT, const float dt, inout float res, const float k)
 {
     float u = getDistanceToHeightmap(position, position.xz, heightmapSize);
@@ -257,11 +325,6 @@ float getDistanceToTerrain(vec3 position, vec3 direction, const int minDistance,
 
     res = min(res, k * dt / u);
     return u;
-}
-
-float getDistanceToHeightmap(vec3 position)
-{
-    return getDistanceToHeightmap(position, position.xz, vec2(textureSize(heightmap, 0)));  
 }
 
 void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
@@ -405,98 +468,76 @@ void traverseOctree(ray r, inout rayHit bestHit, uint depth)
 
 void traverseGrid(ray r, inout rayHit bestHit, uint depth, const vec3 gridPosition, const bool shadowTrace)
 {
-    const ivec3 gridSize = ivec3(160, 110, 100);
-    const vec3 halfGridSize = gridSize * 0.5f;
+    const ivec3 gridSize = ivec3(256, 256, 256);
     const float voxelSize = 1.f;
-    const float halfVoxelSize = voxelSize * 0.5f;
 
-    float distance = INF;
-    vec3 normal;
-
-    const vec3 originalOrigin = r.origin;
-    r.origin -= gridPosition;
-
-    float distanceToGrid = sdBox(r.origin, gridSize);
-    if (distanceToGrid > bestHit.distance)
+    if (!intersectCube(r, gridPosition + (gridSize / 2), gridSize / 2, true, false, 1.f / r.direction))
     {
         return;
     }
 
-    vec3 gridIntersect;
-    if (distanceToGrid <= 0)
+    // find point grid enters grid and set origin to adjacent voxel
+    vec3 workingRayOrigin = r.origin;
     {
-        gridIntersect = r.origin;
-    }
-    else
-    {
-        if (!intersectCube(r, distance, normal, halfGridSize, halfGridSize, false, false, 1.f / r.direction))
+        float distance = signedDistanceBox(workingRayOrigin, gridPosition, gridSize);
+        if (distance > 0.f)
         {
+            vec3 n;
+            intersectCube(r, distance, n, gridPosition + (gridSize / 2), gridSize / 2, false, true, 1.f / r.direction);
+            workingRayOrigin = workingRayOrigin + r.direction * (distance + EPSILON);
+        }
+    }
+    ivec3 mapPosition = ivec3(floor(workingRayOrigin - gridPosition));
+    ivec3 rayStep = ivec3(sign(r.direction));
+
+    vec3 deltaDist = abs(vec3(length(r.direction)) / r.direction);
+    vec3 sideDist = (sign(r.direction) * (vec3(mapPosition) - (workingRayOrigin - gridPosition)) + (sign(r.direction) * 0.5) + 0.5) * deltaDist;
+
+    const int mip = 0;
+    const int divisor = 2 << mip;
+    while (true)
+    {
+        if (any(lessThan(mapPosition, ivec3(0))) || any(greaterThanEqual(mapPosition, gridSize)))
+        {
+            // outside grid, return immediately
             return;
         }
-        gridIntersect = r.origin + distance * r.direction;
+
+        bool hitTexel = any(greaterThan(texelFetch(voxels, mapPosition / 1, 0).rgb, vec3(0)));
+        if (hitTexel)
+        {
+            // handle outside of loop
+            break;
+        }
+
+        bvec3 mask = lessThanEqual(sideDist.xyz, min(sideDist.yzx, sideDist.zxy));
+        sideDist += vec3(mask) * deltaDist;
+		mapPosition += ivec3(vec3(mask)) * rayStep;
     }
-
-    ivec3 origin = ivec3(floor(gridIntersect));
-    const ivec3 step = ivec3(sign(r.direction));
-
-    const vec3 tDelta = abs(vec3(length(r.direction)) / r.direction);
-    vec3 tMax = (sign(r.direction) * (vec3(origin) - r.origin) + (sign(r.direction) * 0.5) + 0.5) * tDelta;
-    bvec3 mask = bvec3(false);
-
-    // this loop is the hot path, should optimise it
-    for (int i = 0; i < 9000; i++)
+    
     {
-        mask = lessThanEqual(tMax.xyz, min(tMax.yzx, tMax.zxy));
-        tMax += vec3(mask) * tDelta;
-        origin += ivec3(mask) * step;
+        float distance;
+        vec3 normal;
 
-        if (!shadowTrace)
+        getOrientedCubeNormalAndDistance(r, distance, normal, gridPosition + mapPosition + (voxelSize / 2), vec3(voxelSize / 2), 1.f / r.direction);
+
+        if (distance < bestHit.distance)
         {
-            bool hitTexel = any(greaterThan(texelFetch(voxels, origin, 0), vec4(0.f, 0.f, 0.f, 1.f)));
-            if (any(lessThan(gridSize, origin)) || any(lessThan(origin, ivec3(0.f))) || hitTexel)
-            {
-                r.origin = originalOrigin;
-                if (hitTexel && getOrientedCubeNormalAndDistance(r, distance, normal, gridPosition + origin + halfVoxelSize, vec3(halfVoxelSize), 1.f / r.direction) < bestHit.distance)
-                {
-                    bestHit.distance = distance;
-                    bestHit.position = r.origin + distance * r.direction;
-                    bestHit.normal = normal;
-                    bestHit.specular = texture(voxels, vec3(origin) / vec3(gridSize)).xyz;
-                    bestHit.albedo = vec3(0.4f);
-                }
-
-                return;
-            }
-        }
-        else
-        {
-            bool hitTexel = any(greaterThan(texelFetch(voxelShadows, origin, 0), vec4(0.f, 0.f, 0.f, 1.f)));
-            if (any(lessThan(gridSize, origin)) || any(lessThan(origin, ivec3(0.f))) || hitTexel)
-            {
-                r.origin = originalOrigin;
-                if (hitTexel && getOrientedCubeNormalAndDistance(r, distance, normal, gridPosition + origin + halfVoxelSize, vec3(halfVoxelSize), 1.f / r.direction) < bestHit.distance)
-                {
-                    bestHit.distance = distance;
-                    bestHit.position = r.origin + distance * r.direction;
-                    bestHit.normal = normal;
-                    bestHit.specular = texture(voxelShadows, vec3(origin) / vec3(gridSize)).xyz;
-                    bestHit.albedo = vec3(0.4f);
-                }
-
-                return;
-            }
+            bestHit.distance = distance;
+            bestHit.position = r.origin + r.direction * distance;
+            bestHit.normal = normal;
+            bestHit.specular = vec3(0.01f);
+            bestHit.albedo = abs(normal);
+            bestHit.shadow = 1.f;
         }
     }
-
 }
 
 rayHit trace(ray r, const bool shadowTrace)
 {
     rayHit bestHit = createRayHit();
-    traverseTerrain(r, bestHit, shadowTrace);
-    //intersectGroundPlane(r, bestHit);
-    //traverseOctree(r, bestHit, 14); // 14 is about 1cm resolution for 128 wide world
-    //traverseGrid(r, bestHit, 3, vec3(1500.f, 500.f, 1500.f), shadowTrace);
+    //traverseTerrain(r, bestHit, shadowTrace);
+    traverseGrid(r, bestHit, 3, vec3(1500.f, 500.f, 1500.f), shadowTrace);
 
     return bestHit;
 }

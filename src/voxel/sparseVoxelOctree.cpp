@@ -135,6 +135,79 @@ void sparseVoxelOctree::subdivide(cpuNode &node, unsigned char children, unsigne
             }
     }
 
+void sparseVoxelOctree::covertFromRGB24ToRGB16(char &r, char &g, char &b)
+    {
+        r = ((r >> 3) & 0b00011111);
+        g = ((g >> 2) & 0b00111111);
+        b = ((b >> 3) & 0b00011111);
+    }
+
+void sparseVoxelOctree::addVoxel(double x, double y, double z, unsigned int depth, char r, char g, char b)
+    {
+        m_cpuChanged = true;
+        covertFromRGB24ToRGB16(r, g, b);
+
+        unsigned int lastVoxel = 0;
+        unsigned int lastDepth = 0;
+        if (exists(x, y, z, depth, &lastVoxel, &lastDepth))
+            {
+                // change voxel colour
+                m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.r = r;
+                m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.g = g;
+                m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.b = b;
+                return;
+            }
+
+        // subdivide and add voxel
+        unsigned int minX = 0;
+        unsigned int minY = 0;
+        unsigned int minZ = 0;
+
+        unsigned int maxX = m_treeSize.x;
+        unsigned int maxY = m_treeSize.y;
+        unsigned int maxZ = m_treeSize.z;
+
+        unsigned int parent = 0;
+        unsigned char lastChildIn = 0;
+
+        for (int i = 0; i < depth; i++)
+            {
+                unsigned char childIn = 0b000;
+
+                bool xLM = x > (minX + (maxX / 2.0));
+                bool yLM = y > (minY + (maxY / 2.0));
+                bool zLM = z > (minZ + (maxZ / 2.0));
+
+                childIn = childIn | (static_cast<unsigned char>(xLM) << 0);
+                childIn = childIn | (static_cast<unsigned char>(yLM) << 1);
+                childIn = childIn | (static_cast<unsigned char>(zLM) << 2);
+
+                if (childIn & 0b001) { minX += maxX / 2; } else { maxX /= 2; }
+                if (childIn & 0b010) { minY += maxY / 2; } else { maxY /= 2; }
+                if (childIn & 0b100) { minZ += maxZ / 2; } else { maxZ /= 2; }
+
+                unsigned char children[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+                unsigned char *childrenPointer = children;
+
+                if (i < lastDepth)
+                    {
+                        continue;
+                    }
+                if (i != 0)
+                    {
+                        m_cpuVoxels[parent].voxel.data.leaves ^= (1 << lastChildIn);
+                    }
+                subdivide(m_cpuVoxels[lastVoxel], 0b0000'0000 | (1 << childIn), &childrenPointer);
+                parent = lastVoxel;
+                lastChildIn = childIn;
+                lastVoxel = children[childIn];
+            }
+
+        m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.r = r;
+        m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.g = g;
+        m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.b = b;
+    }
+
 bool sparseVoxelOctree::exists(double x, double y, double z, unsigned int depth, unsigned int *lastVoxelIndex, unsigned int *lastDepth) const
     {
         unsigned int workingIndex = 0;
@@ -143,12 +216,12 @@ bool sparseVoxelOctree::exists(double x, double y, double z, unsigned int depth,
         double minY = 0;
         double minZ = 0;
 
-        double maxX = m_treeSize;
-        double maxY = m_treeSize;
-        double maxZ = m_treeSize;
+        double maxX = m_treeSize.x;
+        double maxY = m_treeSize.y;
+        double maxZ = m_treeSize.z;
 
         unsigned int currentDepth = 0;
-        while (currentDepth++ < depth)
+        while (currentDepth++ <= depth)
             {
                 unsigned char childIn = 0b000;
 
@@ -200,79 +273,6 @@ bool sparseVoxelOctree::exists(double x, double y, double z, unsigned int depth,
                 *lastDepth = currentDepth - 1;
             }
         return true;
-    }
-
-void sparseVoxelOctree::covertFromRGB24ToRGB16(char &r, char &g, char &b)
-    {
-        r = ((r >> 3) & 0b00011111);
-        g = ((g >> 2) & 0b00111111);
-        b = ((b >> 3) & 0b00011111);
-    }
-
-void sparseVoxelOctree::addVoxel(double x, double y, double z, unsigned int depth, char r, char g, char b)
-    {
-        m_cpuChanged = true;
-        covertFromRGB24ToRGB16(r, g, b);
-
-        unsigned int lastVoxel = 0;
-        unsigned int lastDepth = 0;
-        if (exists(x, y, z, depth, &lastVoxel, &lastDepth))
-            {
-                // change voxel colour
-                m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.r = r;
-                m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.g = g;
-                m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.b = b;
-                return;
-            }
-
-        // subdivide and add voxel
-        unsigned int minX = 0;
-        unsigned int minY = 0;
-        unsigned int minZ = 0;
-
-        unsigned int maxX = m_treeSize;
-        unsigned int maxY = m_treeSize;
-        unsigned int maxZ = m_treeSize;
-
-        unsigned int parent = 0;
-        unsigned char lastChildIn = 0;
-
-        for (int i = 0; i < depth; i++)
-            {
-                unsigned char childIn = 0b000;
-
-                bool xLM = x > (minX + (maxX / 2.0));
-                bool yLM = y > (minY + (maxY / 2.0));
-                bool zLM = z > (minZ + (maxZ / 2.0));
-
-                childIn = childIn | (static_cast<unsigned char>(xLM) << 0);
-                childIn = childIn | (static_cast<unsigned char>(yLM) << 1);
-                childIn = childIn | (static_cast<unsigned char>(zLM) << 2);
-
-                if (childIn & 0b001) { minX += maxX / 2; } else { maxX /= 2; }
-                if (childIn & 0b010) { minY += maxY / 2; } else { maxY /= 2; }
-                if (childIn & 0b100) { minZ += maxZ / 2; } else { maxZ /= 2; }
-
-                unsigned char children[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-                unsigned char *childrenPointer = children;
-
-                if (i < lastDepth)
-                    {
-                        continue;
-                    }
-                if (i != 0)
-                    {
-                        m_cpuVoxels[parent].voxel.data.leaves ^= (1 << lastChildIn);
-                    }
-                subdivide(m_cpuVoxels[lastVoxel], 0b0000'0000 | (1 << childIn), &childrenPointer);
-                parent = lastVoxel;
-                lastChildIn = childIn;
-                lastVoxel = children[childIn];
-            }
-
-        m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.r = r;
-        m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.g = g;
-        m_cpuVoxels[lastVoxel].voxel.data.voxel.colour.b = b;
     }
 
 void sparseVoxelOctree::save(const char *filepath)
@@ -355,7 +355,7 @@ void sparseVoxelOctree::mapToStorageBuffer(storageBuffer &buffer)
         buffer.bind(m_gpuVoxels.data());
     }
 
-sparseVoxelOctree::sparseVoxelOctree(unsigned int treeSize) :
+sparseVoxelOctree::sparseVoxelOctree(glm::uvec3 treeSize) :
     m_treeSize(treeSize)
     {
         createNode();

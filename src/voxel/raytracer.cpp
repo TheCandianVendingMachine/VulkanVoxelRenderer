@@ -3,10 +3,11 @@
 #include "graphics/renderer.hpp"
 #include "graphics/descriptorSettings.hpp"
 #include "graphics/textureFunctions.hpp"
+#include "voxel/voxelGrid.hpp"
 
 #include "imgui.h"
 
-void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, uniformBuffer &viewUBO, uniformBuffer &lightUBO, vulkanImageView &voxelGridView, vulkanImageView &voxelShadowGridView, vulkanSampler &voxelGridSampler, vulkanSampler &voxelShadowGridSampler)
+void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, uniformBuffer &viewUBO, uniformBuffer &lightUBO, voxelGrid &grid)
     {
         descriptorSettings computeSettings;
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // output
@@ -31,8 +32,8 @@ void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, un
         m_computeDescriptors->bindImage(m_renderImageView, 0);
         m_computeDescriptors->bindUBO(viewUBO.getUniformBuffer(), viewUBO.getBufferSize(), 1);
         m_computeDescriptors->bindUBO(lightUBO.getUniformBuffer(), lightUBO.getBufferSize(), 2);
-        m_computeDescriptors->bindImage(voxelGridView, voxelGridSampler, 3);
-        m_computeDescriptors->bindImage(voxelShadowGridView, voxelShadowGridSampler, 4);
+        m_computeDescriptors->bindImage(grid.m_gridView, grid.m_gridSampler, 3);
+        m_computeDescriptors->bindImage(grid.m_shadowGridView, grid.m_shadowGridSampler, 4);
         m_computeDescriptors->bindImage(heightmap.getView(), heightmap.getSampler(), 5);
         m_computeDescriptors->bindImages(m_groundTexturesViews, m_groundTexturesSamplers, m_groundTextureData.m_groundTextureCount, 6);
         m_computeDescriptors->bindUBO(m_groundTerrainDataUBO.getUniformBuffer(), m_groundTerrainDataUBO.getBufferSize(), 7);
@@ -41,9 +42,9 @@ void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, un
         m_computeDescriptors->bindUBO(m_shaderVariablesUBO.getUniformBuffer(), m_shaderVariablesUBO.getBufferSize(), 10);
     }
 
-raytracer::raytracer(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, vulkanImageView &voxelGridView, vulkanImageView &voxelShadowGridView, vulkanSampler &voxelGridSampler, vulkanSampler &voxelShadowGridSampler)
+raytracer::raytracer(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, voxelGrid &grid)
     {
-        create(renderer, heightmap, imageSize, skySphere, viewUBO, lightUBO, voxelGridView, voxelShadowGridView, voxelGridSampler, voxelShadowGridSampler);
+        create(renderer, heightmap, imageSize, skySphere, viewUBO, lightUBO, grid);
     }
 
 raytracer::~raytracer()
@@ -51,7 +52,7 @@ raytracer::~raytracer()
         destroy();
     }
 
-void raytracer::create(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, vulkanImageView &voxelGridView, vulkanImageView &voxelShadowGridView, vulkanSampler &voxelGridSampler, vulkanSampler &voxelShadowGridSampler)
+void raytracer::create(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, voxelGrid &grid)
     {
         m_renderImage.create(imageSize.x, imageSize.y, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_2D);
         m_renderImageView.create(renderer.getDevice(), m_renderImage, VK_FORMAT_R8G8B8A8_SNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
@@ -61,7 +62,7 @@ void raytracer::create(renderer &renderer, heightmap &heightmap, glm::ivec2 imag
         m_skySphereView.create(renderer.getDevice(), m_skySphere, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_skySphere.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
         m_skySphereSampler.create(renderer.getDevice(), m_skySphere.mipLevels, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
-        initComputePipeline(renderer, heightmap, viewUBO, lightUBO, voxelGridView, voxelShadowGridView, voxelGridSampler, voxelShadowGridSampler);
+        initComputePipeline(renderer, heightmap, viewUBO, lightUBO, grid);
 
         m_finalImage.create(imageSize.x, imageSize.y, 1, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_2D);
         m_finalImageView.create(renderer.getDevice(), m_finalImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_2D);
@@ -146,7 +147,7 @@ void raytracer::draw(bool debug)
                 bool updateUBO = false;
                 updateUBO |= ImGui::Selectable("Draw Normals", &m_shaderVariables.m_displayNormals);
                 updateUBO |= ImGui::SliderInt("Max Traces", &m_shaderVariables.m_maxTraces, 0, 8);
-                updateUBO |= ImGui::SliderFloat("Normal Epsilon", &m_shaderVariables.m_normalEpsilon, 0.f, 64.f);
+                updateUBO |= ImGui::SliderFloat("Normal Epsilon", &m_shaderVariables.m_normalEpsilon, 0.0001f, 64.f);
 
                 if (updateUBO)
                     {

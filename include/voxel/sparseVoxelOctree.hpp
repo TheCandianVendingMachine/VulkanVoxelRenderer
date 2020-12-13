@@ -62,7 +62,7 @@ class sparseVoxelOctree
             static constexpr auto c_cpuNodeSize = sizeof(cpuNode);
             static constexpr auto c_gpuNodeSize = sizeof(gpuNode);
 
-            unsigned int m_treeSize = 0;
+            glm::uvec3 m_treeSize;
             bool m_cpuChanged = true;
             std::vector<cpuNode> m_cpuVoxels;
             std::vector<gpuNode> m_gpuVoxels;
@@ -70,12 +70,13 @@ class sparseVoxelOctree
             cpuNode &createNode();
 
             void subdivide(cpuNode &node, unsigned char children, unsigned char *(childrenIndicesOfNode[8]) = nullptr);
-            bool exists(double x, double y, double z, unsigned int depth, unsigned int *lastVoxelIndex = nullptr, unsigned int *lastDepth = nullptr) const;
 
             void covertFromRGB24ToRGB16(char &r, char &g, char &b);
 
         public:
             void addVoxel(double x, double y, double z, unsigned int depth, char r = 255, char g = 255, char b = 255);
+
+            bool exists(double x, double y, double z, unsigned int depth, unsigned int *lastVoxelIndex = nullptr, unsigned int *lastDepth = nullptr) const;
 
             // IO
             void save(const char *filepath);
@@ -84,5 +85,5 @@ class sparseVoxelOctree
             // Input is a non-created storage buffer
             void mapToStorageBuffer(storageBuffer &buffer);
 
-            sparseVoxelOctree(unsigned int treeSize);
+            sparseVoxelOctree(glm::uvec3 treeSize);
     };

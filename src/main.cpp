@@ -122,7 +122,7 @@ int main()
         glm::vec3 rgb(222, 215, 252);
         rgb /= 255.f;
 
-        sparseVoxelOctree testSVO(size);
+        sparseVoxelOctree testSVO({size, size, size});
         /*testSVO.load("TestVoxelTree1.txt");
         //testSVO.addVoxel(1.0, 1.0, 1.0, depth, rgb.r, rgb.g, rgb.b);
         //testSVO.addVoxel(120.0, 1.0, 1.0, depth, rgb.r, rgb.g, rgb.b);
@@ -136,17 +136,6 @@ int main()
 
         testSVO.save("TestVoxelTree1.txt");*/
 
-        voxelGrid testGrid;
-        testGrid.load("testVoxelGrid.txt");
-
-        /*testGrid.init({160, 110, 100});
-        for (int i = 0; i < 5000; i++)
-            {
-                testGrid.add({ rng.generate(0, 159), rng.generate(0, 109), rng.generate(0, 99) }, voxel{ rgb.r, rgb.g, rgb.b });
-            }
-
-        testGrid.save("testVoxelGrid.txt");*/
-
         // we install keyboard callbacks in ImGui creation. To use custom ones we must disable it and call the ImGui callbacks in the handler
         glfwInit();
         window app(1280, 720, "Voxels!!");
@@ -157,9 +146,25 @@ int main()
         renderer renderer(app, settings);
         renderer.initImGui(app);
 
-        glm::vec3 cameraPos = { 0, 5.f, 5.f };
-        glm::vec3 cameraDir = glm::rotate(glm::vec3(1.f, 0.f, 0.f), glm::radians(0.f), glm::vec3(0.f, -1.f, 0.f));
-        cameraDir = glm::rotate(cameraDir, glm::radians(0.f), glm::vec3(0.f, 0.f, 1.f));
+        voxelGrid testGrid({ 256, 256, 256 }, renderer);
+        //testGrid.load("testVoxelGrid.txt");
+
+        testGrid.add({ 0, 0, 0 }, voxel{ rgb.r, rgb.g, rgb.b });
+        testGrid.add({ 50, 52, 20 }, voxel{ rgb.r, rgb.g, rgb.b });
+        testGrid.add({ 1, 1, 200 }, voxel{ rgb.r, rgb.g, rgb.b });
+        testGrid.add({ 200, 200, 200 }, voxel{ rgb.r, rgb.g, rgb.b });
+        for (int i = 0; i < 1000; i++)
+            {
+                testGrid.add({ rng.generate(0, 255), rng.generate(0, 255), rng.generate(0, 255) }, voxel{ rgb.r, rgb.g, rgb.b });
+            }
+
+        testGrid.init(renderer);
+        testGrid.bake();
+        testGrid.bakeImage(renderer);
+        testGrid.save("testVoxelGrid.txt");
+
+        glm::vec3 cameraPos = { 1509.f, 757.f, 1760.f };
+        glm::vec3 cameraDir = { 0.300850391, -0.278304756, -0.912167728 };
         float m_cameraRotation = 0.f;
 
         mvp mvpCamera;
@@ -195,50 +200,10 @@ int main()
         heightmap hm("banff_heightmap/banff_heightmap Height Map (ASTER 30m).png", renderer);
         //heightmap hm("banff_heightmap/test.jpg", renderer);
 
-        alignas(16) vulkanImage voxelGrid;
-        vulkanImageView voxelGridView;
-        vulkanSampler voxelImageSampler;
-
-        alignas(16) vulkanImage voxelShadowGrid;
-        vulkanImageView voxelShadowGridView;
-        vulkanSampler voxelShadowImageSampler;
-
-        voxelGrid.create(160, 110, 100, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R5G6B5_UNORM_PACK16, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_3D);
-        voxelGridView.create(renderer.getDevice(), voxelGrid, VK_FORMAT_R5G6B5_UNORM_PACK16, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D);
-        voxelImageSampler.create(renderer.getDevice(), voxelGrid.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
-
-        voxelShadowGrid.create(160, 110, 100, 1, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, VMA_MEMORY_USAGE_GPU_ONLY, VkImageType::VK_IMAGE_TYPE_3D);
-        voxelShadowGridView.create(renderer.getDevice(), voxelShadowGrid, VK_FORMAT_R8_UNORM, VK_IMAGE_ASPECT_COLOR_BIT, 1, VkImageViewType::VK_IMAGE_VIEW_TYPE_3D);
-        voxelShadowImageSampler.create(renderer.getDevice(), voxelShadowGrid.mipLevels, VkSamplerAddressMode::VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER);
-
-        storageBuffer temp;
-        storageBuffer tempShadow;
-        testGrid.mapToStorageBuffer(temp, tempShadow);
-
-        VkBufferImageCopy bufferCopyRegion{};
-        bufferCopyRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        bufferCopyRegion.imageSubresource.mipLevel = 0;
-        bufferCopyRegion.imageSubresource.baseArrayLayer = 0;
-        bufferCopyRegion.imageSubresource.layerCount = 1;
-        bufferCopyRegion.imageExtent.width = 160;
-        bufferCopyRegion.imageExtent.height = 110;
-        bufferCopyRegion.imageExtent.depth = 100;
-
-        renderer.transitionImageLayout(voxelGrid, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        renderer.copyBufferToImage(temp.getStorageBuffer(), voxelGrid, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
-        renderer.transitionImageLayout(voxelGrid, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-        renderer.transitionImageLayout(voxelShadowGrid, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-        renderer.copyBufferToImage(tempShadow.getStorageBuffer(), voxelShadowGrid, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferCopyRegion);
-        renderer.transitionImageLayout(voxelShadowGrid, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-        temp.destroy();
-        tempShadow.destroy();
-
         //storageBuffer voxelStorageBuffer;
         //testSVO.mapToStorageBuffer(voxelStorageBuffer);
 
-        raytracer raytracer(renderer, hm, {2560, 1440}, "textures/skybox.jpg", viewUBO, lightUBO, voxelGridView, voxelShadowGridView, voxelImageSampler, voxelShadowImageSampler);
+        raytracer raytracer(renderer, hm, {2560, 1440}, "textures/skybox.jpg", viewUBO, lightUBO, testGrid);
         raytracer.addGroundTexture("textures/TexturesCom_Grass0202_1_seamless_S.jpg", 20.f, 200.f);
         raytracer.addGroundTexture("textures/TexturesCom_Grass0157_1_seamless_S.jpg", 300.f, 500.f);
         raytracer.addGroundTexture("textures/TexturesCom_RockRough0030_2_seamless_S.jpg", 600.f, 1600.f);
@@ -263,6 +228,7 @@ int main()
                 OPTICK_FRAME("MainThread");
                 newTime = updateClock.getTime().asSeconds();
                 frameTime = newTime - currentTime;
+                testGrid.rayIntersects(cameraPos, cameraDir);
 
                 if (frameTime > 5.0)
                     {
@@ -457,14 +423,7 @@ int main()
 
         raytracer.destroy();
 
-        voxelGrid.cleanup();
-        voxelGridView.cleanup();
-        voxelImageSampler.cleanup();
-
-        voxelShadowGrid.cleanup();
-        voxelShadowGridView.cleanup();
-        voxelShadowImageSampler.cleanup();
-
+        testGrid.destroy();
         hm.destroy();
 
         space.destroy();

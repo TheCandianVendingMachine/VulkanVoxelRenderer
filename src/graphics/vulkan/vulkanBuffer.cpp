@@ -1,9 +1,9 @@
 #include "graphics/vulkan/vulkanBuffer.hpp"
 #include "graphics/vulkan/vulkanAllocator.hpp"
 
-vulkanBuffer::vulkanBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VmaMemoryUsage memoryUsage)
+vulkanBuffer::vulkanBuffer(VkDeviceSize bytes, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VmaMemoryUsage memoryUsage)
     {
-        create(size, usage, properties, memoryUsage);
+        create(bytes, usage, properties, memoryUsage);
     }
 
 vulkanBuffer::~vulkanBuffer()
@@ -11,11 +11,11 @@ vulkanBuffer::~vulkanBuffer()
         cleanup();
     }
 
-void vulkanBuffer::create(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VmaMemoryUsage memoryUsage)
+void vulkanBuffer::create(VkDeviceSize bytes, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VmaMemoryUsage memoryUsage)
     {
         VkBufferCreateInfo bufferInfo{};
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = size;
+        bufferInfo.size = bytes;
         bufferInfo.usage = usage;
         bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 

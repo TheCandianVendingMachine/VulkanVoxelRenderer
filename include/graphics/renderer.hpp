@@ -108,6 +108,11 @@ class renderer
 
             void recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer);
 
+            oneTimeCommandBuffer &createOneTimeBuffer();
+            void destroyOneTimebuffer(oneTimeCommandBuffer &buffer);
+
+            friend class voxelGrid;
+
         public:
             renderer(window &app, descriptorSettings &settings);
             ~renderer();
@@ -140,5 +145,6 @@ class renderer
             void transitionImageLayout(const vulkanImage &image, VkImageLayout oldLayout, VkImageLayout newLayout);
             void blitImage(vulkanImage &src, VkImageLayout srcLayout, vulkanImage &dst, VkImageLayout dstLayout, int width, int height);
             void copyBufferToImage(vulkanBuffer &source, vulkanImage &destination, VkImageLayout dstLayout, uint32_t regionCount, VkBufferImageCopy *copyRegions);
+            void generateMipmaps(vulkanImage &src, int width, int height, int depth);
 
     };

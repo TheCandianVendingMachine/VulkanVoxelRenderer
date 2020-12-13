@@ -59,6 +59,17 @@ void renderer::recordSubmissionCommandBuffer(VkCommandBuffer submissionBuffer)
             }
     }
 
+renderer::oneTimeCommandBuffer &renderer::createOneTimeBuffer()
+    {
+        m_oneTimeBuffer.create(m_device, m_commandPool);
+        return m_oneTimeBuffer;
+    }
+
+void renderer::destroyOneTimebuffer(oneTimeCommandBuffer &buffer)
+    {
+        buffer.destroy(m_graphicsQueue);
+    }
+
 renderer::renderer(window &app, descriptorSettings &settings)
     {
         VkApplicationInfo appInfo{};
@@ -593,8 +604,6 @@ glm::vec2 renderer::getSize() const
 
 void renderer::transitionImageLayout(const vulkanImage &image, VkImageLayout oldLayout, VkImageLayout newLayout)
     {
-        m_oneTimeBuffer.create(m_device, m_commandPool);
-
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
         barrier.oldLayout = oldLayout;
@@ -641,8 +650,10 @@ void renderer::transitionImageLayout(const vulkanImage &image, VkImageLayout old
                 return;
             }
 
+        oneTimeCommandBuffer &cb = createOneTimeBuffer();
+
         vkCmdPipelineBarrier(
-            m_oneTimeBuffer.m_commandBuffer.m_commandBuffer,
+            cb.m_commandBuffer.m_commandBuffer,
             sourceStage, destinationStage,
             0,
             0, nullptr,
@@ -650,14 +661,13 @@ void renderer::transitionImageLayout(const vulkanImage &image, VkImageLayout old
             1, &barrier
         );
 
-        m_oneTimeBuffer.destroy(m_graphicsQueue);
-
+        destroyOneTimebuffer(cb);
     }
 
 void renderer::blitImage(vulkanImage &src, VkImageLayout srcLayout, vulkanImage &dst, VkImageLayout dstLayout, int width, int height)
     {
-        m_oneTimeBuffer.create(m_device, m_commandPool);
-        vulkanCommandBuffer &commandBuffer = m_oneTimeBuffer.m_commandBuffer.m_commandBuffer;
+        oneTimeCommandBuffer &cb = createOneTimeBuffer();
+        vulkanCommandBuffer &commandBuffer = cb.m_commandBuffer.m_commandBuffer;
 
         VkImageMemoryBarrier barrierSrc{};
         barrierSrc.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -752,13 +762,13 @@ void renderer::blitImage(vulkanImage &src, VkImageLayout srcLayout, vulkanImage 
             1, &barrierDst
         );
 
-        m_oneTimeBuffer.destroy(m_graphicsQueue);
+        destroyOneTimebuffer(cb);
     }
 
 void renderer::copyBufferToImage(vulkanBuffer &source, vulkanImage &destination, VkImageLayout dstLayout, uint32_t regionCount, VkBufferImageCopy *copyRegions)
     {
-        m_oneTimeBuffer.create(m_device, m_commandPool);
-        vulkanCommandBuffer &commandBuffer = m_oneTimeBuffer.m_commandBuffer.m_commandBuffer;
+        oneTimeCommandBuffer &cb = createOneTimeBuffer();
+        vulkanCommandBuffer &commandBuffer = cb.m_commandBuffer.m_commandBuffer;
 
         vkCmdCopyBufferToImage(
             commandBuffer,
@@ -769,7 +779,100 @@ void renderer::copyBufferToImage(vulkanBuffer &source, vulkanImage &destination,
             copyRegions
         );
 
-        m_oneTimeBuffer.destroy(m_graphicsQueue);
+        destroyOneTimebuffer(cb);
+    }
+
+void renderer::generateMipmaps(vulkanImage &src, int width, int height, int depth)
+    {
+        oneTimeCommandBuffer &cb = createOneTimeBuffer();
+
+        VkImageMemoryBarrier barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.image = src;
+        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount = 1;
+        barrier.subresourceRange.levelCount = 1;
+
+        int mipWidth = width;
+        int mipHeight = height;
+        int mipDepth = depth;
+
+        for (int i = 1; i < src.mipLevels; i++)
+            {
+                barrier.subresourceRange.baseMipLevel = i - 1;
+                barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+                vkCmdPipelineBarrier(
+                    cb.m_commandBuffer.m_commandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier
+                );
+
+                VkImageBlit blitProperties{};
+                blitProperties.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                blitProperties.srcSubresource.baseArrayLayer = 0;
+                blitProperties.srcSubresource.mipLevel = i - 1;
+                blitProperties.srcSubresource.layerCount = 1;
+
+                blitProperties.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                blitProperties.dstSubresource.baseArrayLayer = 0;
+                blitProperties.dstSubresource.mipLevel = i;
+                blitProperties.dstSubresource.layerCount = 1;
+
+                blitProperties.srcOffsets[0] = { 0, 0, 0 };
+                blitProperties.srcOffsets[1] = { mipWidth, mipHeight, mipDepth };
+
+                blitProperties.dstOffsets[0] = { 0, 0, 0 };
+                blitProperties.dstOffsets[1] = { mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, mipDepth > 1 ? mipDepth / 2 : 1 };
+
+                vkCmdBlitImage(
+                    cb.m_commandBuffer.m_commandBuffer,
+                    src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    src, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 
+                    1, &blitProperties, VkFilter::VK_FILTER_LINEAR
+                );
+                
+                barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+                barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+                barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+                vkCmdPipelineBarrier(
+                    cb.m_commandBuffer.m_commandBuffer,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                    0, nullptr,
+                    0, nullptr,
+                    1, &barrier
+                );
+
+                if (mipWidth > 1)   { mipWidth /= 2; }
+                if (mipHeight > 1)  { mipHeight /= 2; }
+                if (mipDepth > 1)   { mipDepth /= 2; }
+            }
+
+        barrier.subresourceRange.baseMipLevel = src.mipLevels - 1;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        vkCmdPipelineBarrier(
+            cb.m_commandBuffer.m_commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier
+        );
+
+        destroyOneTimebuffer(cb);
     }
 
 void renderer::oneTimeCommandBuffer::create(const vulkanDevice &device, const vulkanCommandPool &commandPool)
