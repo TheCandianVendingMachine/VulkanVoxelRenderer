@@ -22,6 +22,7 @@ void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, un
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // heightmap variables
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // shader variables
         computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // grid variables
+        computeSettings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_COMPUTE_BIT, 1); // skybox
         
         m_computePipelineID = renderer.createComputePipeline(computeSettings, "shaders/voxel_raytracing_gl.spv");
 
@@ -43,6 +44,7 @@ void raytracer::initComputePipeline(renderer &renderer, heightmap &heightmap, un
         m_computeDescriptors->bindUBO(m_heightmapVariablesUBO.getUniformBuffer(), m_heightmapVariablesUBO.getBufferSize(), 9);
         m_computeDescriptors->bindUBO(m_shaderVariablesUBO.getUniformBuffer(), m_shaderVariablesUBO.getBufferSize(), 10);
         m_computeDescriptors->bindUBO(m_gridVariablesUBO.getUniformBuffer(), m_gridVariablesUBO.getBufferSize(), 11);
+        m_computeDescriptors->bindImage(m_noise.getView(), m_noise.getSampler(), 12);
     }
 
 raytracer::raytracer(renderer &renderer, heightmap &heightmap, glm::ivec2 imageSize, const char *skySphere, uniformBuffer &viewUBO, uniformBuffer &lightUBO, voxelGrid &grid)
@@ -64,6 +66,8 @@ void raytracer::create(renderer &renderer, heightmap &heightmap, glm::ivec2 imag
         loadTexture(skySphere, m_skySphere, renderer);
         m_skySphereView.create(renderer.getDevice(), m_skySphere, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, m_skySphere.mipLevels, VK_IMAGE_VIEW_TYPE_2D);
         m_skySphereSampler.create(renderer.getDevice(), m_skySphere.mipLevels, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+
+        m_noise.createTexture(heightmap.getSize(), renderer);
 
         initComputePipeline(renderer, heightmap, viewUBO, lightUBO, grid);
 
@@ -105,6 +109,8 @@ void raytracer::destroy()
         m_shaderVariablesUBO.destroy();
         m_heightmapVariablesUBO.destroy();
         m_gridVariablesUBO.destroy();
+
+        m_noise.destroy();
     }
 
 void raytracer::addGroundTexture(const char *filepath, float minHeight, float maxHeight)

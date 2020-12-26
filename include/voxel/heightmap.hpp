@@ -36,5 +36,6 @@ class heightmap
             vulkanSampler &getSampler();
 
             float getHeight(glm::vec3 position);
+            glm::ivec2 getSize() const;
 
     };

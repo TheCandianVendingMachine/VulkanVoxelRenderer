@@ -44,6 +44,8 @@ layout(binding = 11) uniform gridVariablesUBO {
     int mip;
 } gridVariables;
 
+layout(binding = 12) uniform sampler2D noise;
+
 const float PI = 3.14159265354f;
 const float INF = 1e10;
 const float EPSILON = 0.001f;
@@ -64,6 +66,11 @@ struct rayHit
     float distance;
     float shadow;
 };
+
+float sampleNoise(vec2 pos)
+{
+    return texture(noise, pos).r;
+}
 
 float saturate(float value)
 {
@@ -309,47 +316,53 @@ float getDistanceToHeightmap(vec3 position)
     return getDistanceToHeightmap(position, position.xz, vec2(textureSize(heightmap, 0)));  
 }
 
-float getDistanceToTerrain(vec3 position, vec3 direction, const int minDistance, const vec2 heightmapSize, const float minT, const float dt, inout float res, const float k)
+float getDistanceToTerrainPrecise(vec3 position, vec3 direction, const float stepDistance, const vec2 heightmapSize, const float minT, const float dt, inout float res)
 {
-    float u = getDistanceToHeightmap(position, position.xz, heightmapSize);
-    if (u <= minDistance)
+    float u;
+    for (u = EPSILON; u < stepDistance; u += dt)
     {
-        for (u = 0.f; u < minDistance; u += dt)
-        {
-            res = min(res, k * dt / u);
+        res = min(res, heightmapVariables.softShadowScale * dt / u);
 
-            position += direction * dt;
-            float height = getTerrainHeightAt(position.xz, heightmapSize);
-            if (position.y - height < minT)
-            {
-                break;
-            }
+        position += direction * dt;
+        float height = getTerrainHeightAt(position.xz, heightmapSize);
+        if (position.y - height < minT)
+        {
+            break;
         }
     }
 
-    res = min(res, k * dt / u);
+    res = min(res, heightmapVariables.softShadowScale * dt / u);
     return u;
 }
 
+// aproximation of distance from https://fileadmin.cs.lth.se/cs/Education/EDAN35/projects/16NiklasJohan_Terrain.pdf
 void traverseTerrain(ray r, inout rayHit bestHit, const bool shadowRay)
 {
-    vec2 heightmapSize = textureSize(heightmap, 0);
-    float previousDistance = bestHit.distance;
+    const vec2 heightmapSize = textureSize(heightmap, 0);
 
     float res = 1.f;
 
+    float tIncrement = heightmapVariables.tIncrement;
     float t = 0.f;
-    float dt;
-    for (int i = 0; i < 500; i++)
+    float p = 0.f;
+    bool candidate = false;
+    for (t = EPSILON; t < heightmapVariables.maxT; t += p)
     {
-        dt = getDistanceToTerrain(r.origin + t * r.direction, r.direction, heightmapVariables.minCheckDistance, heightmapSize, heightmapVariables.minT, heightmapVariables.tIncrement, res, heightmapVariables.softShadowScale);
+        tIncrement = heightmapVariables.tIncrement + 2 * smoothstep(0, 3000.f, t);
 
-        res = min(res, heightmapVariables.softShadowScale * dt / t);
-        if (dt < heightmapVariables.minT || t > heightmapVariables.maxT) { break; }
-        t += dt;
+        vec3 position = r.origin + r.direction * t;
+        float height = getTerrainHeightAt(position.xz, heightmapSize);
+        if (position.y - height < 0.f)
+        {
+            t = t + getDistanceToTerrainPrecise(r.origin + r.direction * (t - p), r.direction, p, heightmapSize, heightmapVariables.minT, tIncrement, res) - p;
+            candidate = true;
+            break;
+        }
+        p = max(tIncrement, position.y - height);
+        res = min(res, heightmapVariables.softShadowScale * p / t);
     }
 
-    if (dt < heightmapVariables.minT && t < previousDistance)
+    if (candidate && t < bestHit.distance)
     {
         // hit
         // thanks Inigo Quilez https://www.iquilezles.org/www/articles/normalsSDF/normalsSDF.htm
@@ -542,8 +555,8 @@ void traverseGrid(ray r, inout rayHit bestHit, uint depth, const vec3 gridPositi
 rayHit trace(ray r, const bool shadowTrace)
 {
     rayHit bestHit = createRayHit();
+    //traverseGrid(r, bestHit, 3, vec3(1500.f, 500.f, 1500.f), shadowTrace);
     traverseTerrain(r, bestHit, shadowTrace);
-    traverseGrid(r, bestHit, 3, vec3(1500.f, 500.f, 1500.f), shadowTrace);
 
     return bestHit;
 }

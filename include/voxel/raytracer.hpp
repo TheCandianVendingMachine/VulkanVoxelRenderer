@@ -11,6 +11,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "graphics/noise.hpp"
+
 class heightmap;
 class voxelGrid;
 class renderer;
@@ -47,6 +49,8 @@ class raytracer
             uniformBuffer m_heightmapVariablesUBO;
             uniformBuffer m_shaderVariablesUBO;
             uniformBuffer m_gridVariablesUBO;
+
+            noise m_noise;
 
             struct
                 {

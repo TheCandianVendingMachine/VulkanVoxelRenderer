@@ -43,6 +43,7 @@
 #include "voxel/voxelGrid.hpp"
 #include "voxel/heightmap.hpp"
 #include "voxel/raytracer.hpp"
+#include "graphics/noise.hpp"
 
 struct mvp
     {
@@ -138,7 +139,7 @@ int main()
 
         // we install keyboard callbacks in ImGui creation. To use custom ones we must disable it and call the ImGui callbacks in the handler
         glfwInit();
-        window app(1280, 720, "Voxels!!");
+        window app(1920, 1080, "Voxels!!");
 
         descriptorSettings settings;
         settings.addSetting(VkDescriptorType::VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VkShaderStageFlagBits::VK_SHADER_STAGE_FRAGMENT_BIT, 1);
@@ -199,7 +200,7 @@ int main()
         //storageBuffer voxelStorageBuffer;
         //testSVO.mapToStorageBuffer(voxelStorageBuffer);
 
-        raytracer raytracer(renderer, hm, {2560, 1440}, "textures/skybox.jpg", viewUBO, lightUBO, testGrid);
+        raytracer raytracer(renderer, hm, {1920, 1080}, "textures/skybox.jpg", viewUBO, lightUBO, testGrid);
         raytracer.addGroundTexture("textures/TexturesCom_Grass0202_1_seamless_S.jpg", 20.f, 200.f);
         raytracer.addGroundTexture("textures/TexturesCom_Grass0157_1_seamless_S.jpg", 300.f, 500.f);
         raytracer.addGroundTexture("textures/TexturesCom_RockRough0030_2_seamless_S.jpg", 600.f, 1600.f);
@@ -207,7 +208,7 @@ int main()
 
         fe::clock frameClock;
         fe::clock programClock;
-        std::array<int64_t, 100> frameTimes;
+        std::array<int64_t, 100> frameTimes = {};
         unsigned int index = 0;
 
         const double updateRate = 1.0 / 60.0;
@@ -233,7 +234,7 @@ int main()
                 currentTime = newTime;
                 accumulator += frameTime;
 
-                frameTimes.at(index) = frameClock.getTime().asMicroseconds();
+                frameTimes[index] = frameClock.getTime().asMicroseconds();
                 frameClock.restart();
 
                 app.processEvents();
@@ -245,9 +246,10 @@ int main()
                         for (auto &frameTime : frameTimes)
                             {
                                 avgTime += frameTime;
+                                frameTime = 0;
                             }
 
-                        fe::time avgFrameTime = fe::microseconds(avgTime / frameTimes.size());
+                        fe::time avgFrameTime = fe::microseconds(avgTime / index);
                         unsigned int fps = static_cast<unsigned int>(1.0 / avgFrameTime.asSeconds());
 
                         std::string formatted = std::to_string(avgFrameTime.asSeconds()) + " | " + std::to_string(fps) + " | " + std::to_string(fpsUpdateClock.getTime().asSeconds());

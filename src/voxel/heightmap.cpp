@@ -102,3 +102,8 @@ float heightmap::getHeight(glm::vec3 position)
         // desmos provided these numbers, pure magic
         return (static_cast<float>(pixel) / 255.f) * m_mapWidthScale * m_mapHeightScale;
     }
+
+glm::ivec2 heightmap::getSize() const
+    {
+        return m_size;
+    }
